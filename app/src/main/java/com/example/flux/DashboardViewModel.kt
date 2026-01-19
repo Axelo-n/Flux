@@ -82,7 +82,8 @@ class DashboardViewModel : ViewModel() {
                 state.copy(
                     isLoading = false,
                     currentBalance = "Rp 360.000",
-                    extraBalance = "+ Rp 50.000",
+                    extraBalance = "Rp 50.000",
+                    isExtraBalancePositive = true,
                     dailyBudgetLeft = "Rp 60.000",
                     weeklyUsagePercent = 0.75f, // 75%
                     graphData = dummyGraph,

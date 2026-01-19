@@ -1,20 +1,50 @@
 package com.example.flux
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -27,6 +57,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.example.flux.ui.screen.dashboard.DashboardViewModel
 import com.example.flux.ui.theme.AppFont
 import com.example.flux.ui.theme.CatBlue
@@ -40,92 +74,108 @@ import com.example.flux.ui.theme.UIGreen
 import com.example.flux.ui.theme.UIRed
 import com.example.flux.ui.theme.UISurface
 import com.example.flux.ui.theme.UITeal
-import com.example.flux.ui.theme.UITertiary
 import com.example.flux.ui.theme.UIWhite
 
 @Composable
-fun DashboardScreen(
-    viewModel: DashboardViewModel = viewModel()
-) {
-    val state by viewModel.uiState.collectAsState()
-    var selectedNavIndex by remember { mutableIntStateOf(0) }
-    val isListenerActive = true
+fun DashboardScreen() {
+    val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route ?: FluxRoutes.HOME
 
-    // 1. Scaffold cuma buat ngatur System Bar (Status bar atas)
+    // Logic: Tampilkan Navbar & FAB HANYA di halaman utama (Home, Wallet, dll)
+    // Kalau lagi di halaman "Add Transaction", sembunyikan.
+    val showBottomComponents = currentRoute in listOf(
+        FluxRoutes.HOME, FluxRoutes.ANALYTICS, FluxRoutes.HISTORY, FluxRoutes.WALLET
+    )
+
+    val selectedNavIndex = when (currentRoute) {
+        FluxRoutes.HOME -> 0
+        FluxRoutes.ANALYTICS -> 1
+        FluxRoutes.HISTORY -> 2
+        FluxRoutes.WALLET -> 3
+        else -> 0
+    }
+
     Scaffold(
-        containerColor = UIBackground
-        // HAPUS parameter bottomBar = { ... } dari sini!
+        containerColor = UIBackground,
+        // FAB (Tombol Tambah)
+        floatingActionButton = {
+            // Animasi Show/Hide FAB
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showBottomComponents, // Cuma muncul di Home
+                enter = androidx.compose.animation.scaleIn(),
+                exit = androidx.compose.animation.scaleOut()
+            ) {
+                FloatingActionButton(
+                    onClick = { navController.navigate(FluxRoutes.ADD_TRANSACTION) },
+                    containerColor = UITeal,
+                    contentColor = UIBackground,
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .padding(bottom = 100.dp) // Naik dikit biar ga ketutupan Navbar
+                        .size(56.dp)
+                        .shadow(8.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add")
+                }
+            }
+        }
     ) { innerPadding ->
-
-        // 2. Gunakan Box sebagai container utama buat numpuk (Stack)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Kita cuma butuh padding atas dari Scaffold (biar ga nabrak status bar)
                 .padding(top = innerPadding.calculateTopPadding())
         ) {
-
-            // LAYER 1: KONTEN (Paling Belakang)
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-                // INI KUNCINYA:
-                // Kasih "bantalan" kosong di paling bawah setinggi Navbar (80dp) + Jarak (30dp) + Extra (20dp)
-                // Jadi pas di-scroll mentok, item terakhir bakal naik di atas navbar.
-                contentPadding = PaddingValues(bottom = 150.dp, top = 20.dp)
+            // LAYER 1: NAV HOST
+            NavHost(
+                navController = navController,
+                startDestination = FluxRoutes.HOME,
+                modifier = Modifier.fillMaxSize()
             ) {
-                // ... (Item-item Header, Graph, dll sama kayak sebelumnya) ...
+                // ... Rute Home & Placeholders SAMA SEPERTI SEBELUMNYA ...
+                composable(FluxRoutes.HOME) { HomeScreen() }
+                composable(FluxRoutes.ANALYTICS) { PlaceholderScreen("Analytics") }
+                composable(FluxRoutes.HISTORY) { PlaceholderScreen("History") }
+                composable(FluxRoutes.WALLET) { PlaceholderScreen("Wallet") }
 
-                // Item 1: Header
-                item { HeaderSection(isActive = state.isListenerActive) }
-                // Item 2: Budget Grid
-                item { BudgetGridSection(
-                    dailyLeft = state.dailyBudgetLeft,
-                    weeklyPercent = state.weeklyUsagePercent
-                ) }
-                // Item 3: Balance
-                item { BalanceRowSection(
-                    currentBalance = state.currentBalance,
-                    extraBalance = state.extraBalance
-                ) }
-                // Item 4: Graph
-                item { SpendingGraphSection(dataPoints = state.graphData) }
-                // Item 5: Transaction List
-                item { RecentTransactionsCard(transactions = state.recentTransactions) }
+                // RUTE BARU: ADD TRANSACTION
+                composable(FluxRoutes.ADD_TRANSACTION) {
+                    AddTransactionScreen(
+                        onBack = { navController.popBackStack() },
+                        // Update onSave buat nangkep parameter boolean baru
+                        onSave = { amount, note, category, isIncome ->
 
-                // FOOTER CANTIK (Pengganti Spacer kosong)
-                item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_wallet_outline), // Pake icon apa aja
-                            contentDescription = null,
-                            tint = UIGray.copy(alpha = 0.3f),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "You are up to date",
-                            style = AppFont.Medium.copy(fontSize = 12.sp, color = UIGray.copy(alpha = 0.3f))
-                        )
-                    }
+                            // TODO: Nanti kita simpan ke database pake isIncome ini
+                            println("Saved: $amount | $note | $category | Income? $isIncome")
+
+                            navController.popBackStack()
+                        }
+                    )
                 }
             }
 
-            // LAYER 2: NAVBAR (Mengambang di Depan)
-            // Kita tempel di paling bawah layar
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter) // Tempel bawah
-            ) {
-                FluxBottomNavigation(
-                    selectedIndex = selectedNavIndex,
-                    onItemSelected = { selectedNavIndex = it }
-                )
+            // LAYER 2: NAVBAR (Hanya muncul jika showBottomComponents = true)
+            if (showBottomComponents) {
+                Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                    FluxBottomNavigation(
+                        selectedIndex = selectedNavIndex,
+                        onItemSelected = { index ->
+                            // ... LOGIC NAVIGASI SAMA SEPERTI SEBELUMNYA ...
+                            val route = when(index) {
+                                0 -> FluxRoutes.HOME
+                                1 -> FluxRoutes.ANALYTICS
+                                2 -> FluxRoutes.HISTORY
+                                3 -> FluxRoutes.WALLET
+                                else -> FluxRoutes.HOME
+                            }
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -257,7 +307,7 @@ fun BudgetGridSection(dailyLeft: String, weeklyPercent: Float) {
 }
 
 @Composable
-fun BalanceRowSection(currentBalance: String, extraBalance: String) {
+fun BalanceRowSection(currentBalance: String, extraBalance: String, isPositive: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(20.dp)
@@ -266,7 +316,7 @@ fun BalanceRowSection(currentBalance: String, extraBalance: String) {
         FluxCard(modifier = Modifier.weight(1f).height(80.dp)) {
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Text(text = "Current Balance", style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = (3).dp))
-                Text(text = currentBalance, style = AppFont.Bold.copy(color = UIWhite, fontSize = 24.sp), modifier = Modifier.offset(y = (-3).dp))
+                Text(text = currentBalance, style = AppFont.Bold.copy(color = UIWhite, fontSize = 20.sp), modifier = Modifier.offset(y = (-3).dp))
             }
         }
 
@@ -275,8 +325,13 @@ fun BalanceRowSection(currentBalance: String, extraBalance: String) {
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Text(text = "Extra Balance", style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = (3).dp))
                 Text(
-                    text = extraBalance,
-                    style = AppFont.Bold.copy(color = UIGreen, fontSize = 24.sp), modifier = Modifier.offset(y = (-3).dp)
+                    text = extraBalance, // Teks udah bersih tanpa +
+                    style = AppFont.Bold.copy(
+                        // Kalau Positive -> Hijau, Kalau Negative -> Merah
+                        color = if (isPositive) UIGreen else UIRed,
+                        fontSize = 20.sp
+                    ),
+                    modifier = Modifier.offset(y = (-3).dp)
                 )
             }
         }
@@ -526,7 +581,8 @@ fun FluxBottomNavigation(selectedIndex: Int, onItemSelected: (Int) -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth() // Buat centering di layar
-            .padding(bottom = 30.dp), // Jarak dari bawah layar biar 'ngambang'
+            .padding(bottom = 30.dp)
+            .shadow(elevation = 8.dp), // Jarak dari bawah layar biar 'ngambang'
         contentAlignment = Alignment.Center
     ) {
         // The Navbar Pill
@@ -659,7 +715,7 @@ fun BottomSpacer(){
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 20.dp, bottom = 50.dp), // Bottom padding biar naik dr navbar
+            .padding(top = 20.dp, bottom = 0.dp), // Bottom padding biar naik dr navbar
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -693,6 +749,48 @@ fun BottomSpacer(){
                 color = UIGray.copy(alpha = 0.3f) // Pudar banget
             )
         )
+    }
+}
+
+// --- TAMBAHAN BARU DI BAGIAN BAWAH FILE ---
+
+@Composable
+fun HomeScreen(
+    // Kita pindahin ViewModel ke sini
+    viewModel: DashboardViewModel = viewModel()
+) {
+    val state by viewModel.uiState.collectAsState()
+
+    // Ini LazyColumn yang tadinya ada di DashboardScreen
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+        contentPadding = PaddingValues(bottom = 150.dp, top = 20.dp)
+    ) {
+        item { HeaderSection(isActive = state.isListenerActive) }
+
+        item {
+            BudgetGridSection(
+                dailyLeft = state.dailyBudgetLeft,
+                weeklyPercent = state.weeklyUsagePercent
+            )
+        }
+
+        item {
+            BalanceRowSection(
+                currentBalance = state.currentBalance,
+                extraBalance = state.extraBalance,
+                isPositive = state.isExtraBalancePositive // <--- Kiri data boolean ini
+            )
+        }
+
+        item { SpendingGraphSection(dataPoints = state.graphData) }
+
+        item { RecentTransactionsCard(transactions = state.recentTransactions) }
+
+        item { BottomSpacer() }
     }
 }
 

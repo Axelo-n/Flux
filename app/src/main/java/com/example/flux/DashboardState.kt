@@ -29,6 +29,7 @@ data class DashboardState(
     // Header Data
     val currentBalance: String = "Rp 0",
     val extraBalance: String = "Rp 0",
+    val isExtraBalancePositive: Boolean = true,
 
     // Budget Data
     val dailyBudgetLeft: String = "Rp 0",
