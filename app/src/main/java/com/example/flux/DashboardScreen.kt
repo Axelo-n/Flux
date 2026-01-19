@@ -1,19 +1,13 @@
 package com.example.flux
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -26,13 +20,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.flux.ui.screen.dashboard.DashboardViewModel
 import com.example.flux.ui.theme.AppFont
 import com.example.flux.ui.theme.CatBlue
 import com.example.flux.ui.theme.CatOrange
@@ -48,25 +43,11 @@ import com.example.flux.ui.theme.UITeal
 import com.example.flux.ui.theme.UITertiary
 import com.example.flux.ui.theme.UIWhite
 
-// --- DUMMY DATA MODELS ---
-data class Transaction(
-    val id: Int,
-    val title: String,
-    val category: String,
-    val amount: String,
-    val iconRes: Int,     // ID drawable icon
-    val iconBgColor: Color, // Warna bulatannya
-    val isIncome: Boolean   // Buat nentuin warna teks duit (Hijau/Merah)
-)
-
-data class DayData(
-    val day: String,
-    val amount: Float,
-    val limit: Float
-)
-
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(
+    viewModel: DashboardViewModel = viewModel()
+) {
+    val state by viewModel.uiState.collectAsState()
     var selectedNavIndex by remember { mutableIntStateOf(0) }
     val isListenerActive = true
 
@@ -98,15 +79,21 @@ fun DashboardScreen() {
                 // ... (Item-item Header, Graph, dll sama kayak sebelumnya) ...
 
                 // Item 1: Header
-                item { HeaderSection(isActive = isListenerActive) }
+                item { HeaderSection(isActive = state.isListenerActive) }
                 // Item 2: Budget Grid
-                item { BudgetGridSection() }
+                item { BudgetGridSection(
+                    dailyLeft = state.dailyBudgetLeft,
+                    weeklyPercent = state.weeklyUsagePercent
+                ) }
                 // Item 3: Balance
-                item { BalanceRowSection() }
+                item { BalanceRowSection(
+                    currentBalance = state.currentBalance,
+                    extraBalance = state.extraBalance
+                ) }
                 // Item 4: Graph
-                item { SpendingGraphSection() }
+                item { SpendingGraphSection(dataPoints = state.graphData) }
                 // Item 5: Transaction List
-                item { RecentTransactionsCard() }
+                item { RecentTransactionsCard(transactions = state.recentTransactions) }
 
                 // FOOTER CANTIK (Pengganti Spacer kosong)
                 item {
@@ -198,7 +185,7 @@ fun HeaderSection(isActive: Boolean) {
 }
 
 @Composable
-fun BudgetGridSection() {
+fun BudgetGridSection(dailyLeft: String, weeklyPercent: Float) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(20.dp)
@@ -214,7 +201,7 @@ fun BudgetGridSection() {
                     modifier = Modifier.offset(y = (3).dp)
                 )
                 Text(
-                    text = "Rp 60.000",
+                    text = dailyLeft,
                     style = AppFont.Bold.copy(color = UIWhite, fontSize = 32.sp),
                     modifier = Modifier.offset(y = (-3).dp)
                 )
@@ -260,7 +247,7 @@ fun BudgetGridSection() {
                         drawRoundRect(
                             brush = Brush.horizontalGradient(listOf(UITeal, UIBlue)),
                             cornerRadius = cornerRadius,
-                            size = size.copy(width = size.width * 0.75f) // Ganti 0.75f sesuai data real
+                            size = size.copy(width = size.width * weeklyPercent)
                         )
                     }
                 }
@@ -270,7 +257,7 @@ fun BudgetGridSection() {
 }
 
 @Composable
-fun BalanceRowSection() {
+fun BalanceRowSection(currentBalance: String, extraBalance: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(20.dp)
@@ -279,7 +266,7 @@ fun BalanceRowSection() {
         FluxCard(modifier = Modifier.weight(1f).height(80.dp)) {
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Text(text = "Current Balance", style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = (3).dp))
-                Text(text = "Rp 360.000", style = AppFont.Bold.copy(color = UIWhite, fontSize = 24.sp), modifier = Modifier.offset(y = (-3).dp))
+                Text(text = currentBalance, style = AppFont.Bold.copy(color = UIWhite, fontSize = 24.sp), modifier = Modifier.offset(y = (-3).dp))
             }
         }
 
@@ -288,7 +275,7 @@ fun BalanceRowSection() {
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Text(text = "Extra Balance", style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = (3).dp))
                 Text(
-                    text = "+Rp 50.000",
+                    text = extraBalance,
                     style = AppFont.Bold.copy(color = UIGreen, fontSize = 24.sp), modifier = Modifier.offset(y = (-3).dp)
                 )
             }
@@ -297,17 +284,7 @@ fun BalanceRowSection() {
 }
 
 @Composable
-fun SpendingGraphSection() {
-    val dataPoints = listOf(
-        DayData("Mon", 40f, 40f),
-        DayData("Tue", 40f, 40f),
-        DayData("Wed", 60f, 40f),
-        DayData("Thu", 30f, 40f),
-        DayData("Fri", 38f, 40f),
-        DayData("Sat", 80f, 60f),
-        DayData("Sun", 20f, 60f)
-    )
-
+fun SpendingGraphSection(dataPoints: List<DayData>) {
     FluxCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -376,7 +353,7 @@ fun SpendingGraphSection() {
                             val maxVal = 100f
                             val minVal = 20f
                             val range = maxVal - minVal
-                            val colWidth = width / dataPoints.size // Lebar per kolom
+                            val colWidth = if (dataPoints.isNotEmpty()) width / dataPoints.size else 0f // Lebar per kolom
 
                             val points = dataPoints.mapIndexed { index, dayData ->
                                 // X: Geser ke tengah kolom
@@ -448,7 +425,7 @@ fun SpendingGraphSection() {
 }
 
 @Composable
-fun RecentTransactionsCard() {
+fun RecentTransactionsCard(transactions: List<Transaction>) {
     // Bungkus semua dalam satu Card besar
     FluxCard(
         modifier = Modifier
@@ -465,13 +442,9 @@ fun RecentTransactionsCard() {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // List Item (Manual Column biar ga conflict scroll)
-            val transactions = getDummyTransactions()
-
+            // Loop pakai variable parameter
             transactions.forEachIndexed { index, transaction ->
                 TransactionRowItem(transaction)
-
-                // Kasih jarak antar item, kecuali yang terakhir
                 if (index < transactions.size - 1) {
                     Spacer(modifier = Modifier.height(10.dp))
                 }
@@ -531,9 +504,8 @@ fun TransactionRowItem(transaction: Transaction) {
 
         // 3. Amount (Kanan)
         Text(
-            text = transaction.amount,
+            text = transaction.formattedAmount, // GANTI DARI amount KE formattedAmount
             style = AppFont.Bold.copy(
-                // Hijau kalau Income, Merah kalau Expense
                 color = if (transaction.isIncome) UIGreen else UIRed,
                 fontSize = 18.sp
             )
@@ -650,16 +622,34 @@ fun FluxCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
 fun getDummyTransactions(): List<Transaction> {
     return listOf(
         Transaction(
-            1, "Transfer from Michael", "Account Transfer",
-            "Rp 150.000", R.drawable.ic_card_outline, CatBlue, true
+            id = 1,
+            title = "Transfer from Michael",
+            category = "Account Transfer",
+            amount = 150000.0,
+            formattedAmount = "+ Rp 150.000",
+            iconRes = R.drawable.ic_card_outline,
+            iconBgColor = CatBlue,
+            isIncome = true
         ),
         Transaction(
-            2, "Warung Mba Sri", "Food and Beverages",
-            "Rp 19.000", R.drawable.ic_food_outline, CatOrange, false
+            id = 2,
+            title = "Warung Mba Sri",
+            category = "Food and Beverages",
+            amount = 19000.0,
+            formattedAmount = "- Rp 19.000",
+            iconRes = R.drawable.ic_food_outline,
+            iconBgColor = CatOrange,
+            isIncome = false
         ),
         Transaction(
-            3, "Aeon Supermarket", "Groceries and Shopping",
-            "Rp 148.300", R.drawable.ic_cart_outline, CatPurple, false
+            id = 3,
+            title = "Aeon Supermarket",
+            category = "Groceries",
+            amount = 148300.0,
+            formattedAmount = "- Rp 148.300",
+            iconRes = R.drawable.ic_cart_outline,
+            iconBgColor = CatPurple,
+            isIncome = false
         )
     )
 }
@@ -716,13 +706,14 @@ fun DashboardScreenPreview() {
 @Composable
 fun TransactionItemPreview() {
     TransactionRowItem(
-        transaction = Transaction(
+        Transaction(
             id = 1,
-            title = "Contoh Transaksi",
-            category = "Kategori",
-            amount = "- Rp 50.000",
-            iconRes = R.drawable.ic_food_outline, // Pastikan resource ini ada
-            iconBgColor = CatOrange,
+            title = "Transfer from Michael",
+            category = "Account Transfer",
+            amount = 150000.0,
+            formattedAmount = "Rp 150.000",
+            iconRes = R.drawable.ic_card_outline,
+            iconBgColor = CatBlue,
             isIncome = true
         )
     )
