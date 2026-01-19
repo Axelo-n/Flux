@@ -61,7 +61,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.flux.ui.screen.dashboard.DashboardViewModel
 import com.example.flux.ui.theme.AppFont
 import com.example.flux.ui.theme.CatBlue
 import com.example.flux.ui.theme.CatOrange
@@ -77,7 +76,7 @@ import com.example.flux.ui.theme.UITeal
 import com.example.flux.ui.theme.UIWhite
 
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(viewModel: DashboardViewModel) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: FluxRoutes.HOME
@@ -133,7 +132,7 @@ fun DashboardScreen() {
                 modifier = Modifier.fillMaxSize()
             ) {
                 // ... Rute Home & Placeholders SAMA SEPERTI SEBELUMNYA ...
-                composable(FluxRoutes.HOME) { HomeScreen() }
+                composable(FluxRoutes.HOME) { HomeScreen(viewModel = viewModel) }
                 composable(FluxRoutes.ANALYTICS) { PlaceholderScreen("Analytics") }
                 composable(FluxRoutes.HISTORY) { PlaceholderScreen("History") }
                 composable(FluxRoutes.WALLET) { PlaceholderScreen("Wallet") }
@@ -142,11 +141,10 @@ fun DashboardScreen() {
                 composable(FluxRoutes.ADD_TRANSACTION) {
                     AddTransactionScreen(
                         onBack = { navController.popBackStack() },
-                        // Update onSave buat nangkep parameter boolean baru
                         onSave = { amount, note, category, isIncome ->
 
-                            // TODO: Nanti kita simpan ke database pake isIncome ini
-                            println("Saved: $amount | $note | $category | Income? $isIncome")
+                            // PANGGIL VIEWMODEL BUAT SIMPAN KE DB
+                            viewModel.addTransaction(amount, note, category, isIncome)
 
                             navController.popBackStack()
                         }
@@ -757,7 +755,7 @@ fun BottomSpacer(){
 @Composable
 fun HomeScreen(
     // Kita pindahin ViewModel ke sini
-    viewModel: DashboardViewModel = viewModel()
+    viewModel: DashboardViewModel
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -797,7 +795,7 @@ fun HomeScreen(
 @Preview(showBackground = true, backgroundColor = 0xFF0B0E11) // Warna UIBackground
 @Composable
 fun DashboardScreenPreview() {
-    DashboardScreen()
+    DashboardScreen(viewModel())
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFF0B0E11)

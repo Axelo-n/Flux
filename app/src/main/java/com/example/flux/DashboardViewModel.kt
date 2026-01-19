@@ -1,95 +1,125 @@
-package com.example.flux.ui.screen.dashboard
+package com.example.flux
 
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.flux.DashboardState
-import com.example.flux.DayData
-import com.example.flux.R
-import com.example.flux.Transaction
 import com.example.flux.ui.theme.*
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.Locale
 
-class DashboardViewModel : ViewModel() {
+class DashboardViewModel(private val repository: TransactionRepository) : ViewModel() {
 
-    // State holder
     private val _uiState = MutableStateFlow(DashboardState())
     val uiState: StateFlow<DashboardState> = _uiState.asStateFlow()
 
     init {
-        // Otomatis load data pas app dibuka
-        loadDashboardData()
+        // Load data beneran dari Database
+        observeDatabase()
     }
 
-    private fun loadDashboardData() {
+    // Fungsi buat Simpan Transaksi Baru (Dipanggil dari UI)
+    fun addTransaction(amount: Double, note: String, category: String, isIncome: Boolean) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-
-            // Simulasi loading
-            delay(500)
-
-            // 1. Siapkan Data Dummy Transaksi (Pindah dari UI ke sini)
-            val dummyTransactions = listOf(
-                Transaction(
-                    id = 1,
-                    title = "Transfer from Michael",
-                    category = "Account Transfer",
-                    amount = 150000.0,
-                    formattedAmount = "Rp 150.000",
-                    iconRes = R.drawable.ic_card_outline,
-                    iconBgColor = CatBlue,
-                    isIncome = true
-                ),
-                Transaction(
-                    id = 2,
-                    title = "Warung Mba Sri",
-                    category = "Food and Beverages",
-                    amount = 19000.0,
-                    formattedAmount = "Rp 19.000",
-                    iconRes = R.drawable.ic_food_outline,
-                    iconBgColor = CatOrange,
-                    isIncome = false
-                ),
-                Transaction(
-                    id = 3,
-                    title = "Aeon Supermarket",
-                    category = "Groceries",
-                    amount = 148300.0,
-                    formattedAmount = "Rp 148.300",
-                    iconRes = R.drawable.ic_cart_outline,
-                    iconBgColor = CatPurple,
-                    isIncome = false
-                )
+            val newTx = TransactionEntity(
+                amount = amount,
+                note = note,
+                category = category,
+                isIncome = isIncome
             )
+            repository.insert(newTx)
+        }
+    }
 
-            // 2. Siapkan Data Grafik
-            val dummyGraph = listOf(
-                DayData("Mon", 40f, 40f),
-                DayData("Tue", 40f, 40f),
-                DayData("Wed", 60f, 40f),
-                DayData("Thu", 30f, 40f),
-                DayData("Fri", 38f, 40f),
-                DayData("Sat", 80f, 60f),
-                DayData("Sun", 20f, 60f)
-            )
+    private fun observeDatabase() {
+        viewModelScope.launch {
+            // Kita gabungin 3 sumber data: List Transaksi, Total Income, Total Expense
+            combine(
+                repository.allTransactions,
+                repository.totalIncome,
+                repository.totalExpense
+            ) { transactions, income, expense ->
+                Triple(transactions, income ?: 0.0, expense ?: 0.0)
+            }.collect { (txList, totalIn, totalEx) ->
 
-            // 3. Masukkan ke State
-            _uiState.update { state ->
-                state.copy(
-                    isLoading = false,
-                    currentBalance = "Rp 360.000",
-                    extraBalance = "Rp 50.000",
-                    isExtraBalancePositive = true,
-                    dailyBudgetLeft = "Rp 60.000",
-                    weeklyUsagePercent = 0.75f, // 75%
-                    graphData = dummyGraph,
-                    recentTransactions = dummyTransactions
-                )
+                // 1. Hitung Saldo
+                val currentBalance = totalIn - totalEx
+                val balanceFormatted = formatRupiah(currentBalance)
+                val extraFormatted = formatRupiah(totalIn) // Semenatara pake total income buat extra
+
+                // 2. Convert Entity (Database) ke UI Model (Tampilan)
+                val uiTransactions = txList.map { entity ->
+                    // Logic milih Icon & Warna berdasarkan Kategori
+                    val (icon, color) = getCategoryStyle(entity.category, entity.isIncome)
+
+                    Transaction(
+                        id = entity.id,
+                        title = entity.note.ifEmpty { entity.category }, // Kalo note kosong, pake nama kategori
+                        category = entity.category,
+                        amount = entity.amount,
+                        formattedAmount = formatRupiah(entity.amount),
+                        iconRes = icon,
+                        iconBgColor = color,
+                        isIncome = entity.isIncome
+                    )
+                }
+
+                // 3. Logic Grafik Sederhana (Dummy logic biar grafik gerak dulu)
+                // Nanti kita update biar real berdasarkan tanggal
+                val graphData = _uiState.value.graphData // Pake data lama dulu
+
+                // 4. Update UI State
+                _uiState.update { state ->
+                    state.copy(
+                        isLoading = false,
+                        currentBalance = balanceFormatted,
+                        extraBalance = extraFormatted,
+                        isExtraBalancePositive = true,
+                        recentTransactions = uiTransactions, // Data list udah real!
+                        dailyBudgetLeft = formatRupiah(60000.0 - (totalEx / 30)), // Simulasi sisa budget
+                        graphData = graphData
+                    )
+                }
             }
         }
+    }
+
+    // Helper: Format Rupiah
+    private fun formatRupiah(amount: Double): String {
+        val format = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
+        format.maximumFractionDigits = 0
+        return format.format(amount).replace("Rp", "Rp ")
+    }
+
+    // Helper: Milih Icon & Warna
+    private fun getCategoryStyle(category: String, isIncome: Boolean): Pair<Int, Color> {
+        return if (isIncome) {
+            Pair(R.drawable.ic_wallet_outline, CatBlue) // Default Income Icon
+        } else {
+            when (category) {
+                "Food" -> Pair(R.drawable.ic_food_outline, CatOrange)
+                "Transport" -> Pair(R.drawable.ic_cart_outline, CatPurple) // Ganti icon transport kalo ada
+                "Shopping" -> Pair(R.drawable.ic_cart_outline, CatPurple)
+                else -> Pair(R.drawable.ic_history_outline, UIGray)
+            }
+        }
+    }
+}
+
+// --- PABRIK VIEWMODEL (FACTORY) ---
+// Ini wajib ada biar kita bisa nyuntik Repository ke ViewModel
+class DashboardViewModelFactory(private val repository: TransactionRepository) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(DashboardViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return DashboardViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

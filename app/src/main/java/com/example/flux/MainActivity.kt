@@ -4,27 +4,28 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.flux.ui.theme.FluxTheme
-// Kalau DashboardScreen ada di folder ui/screen, uncomment baris bawah ini:
-// import com.example.flux.ui.screen.DashboardScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // 1. Full Screen Mode
-        // Ini bikin app lo nge-draw sampai ke belakang jam/baterai (Status Bar)
-        // Biar kelihatan modern & luas.
         enableEdgeToEdge()
 
+        // 1. Siapkan Database & Repository
+        val database = AppDatabase.getDatabase(this)
+        val repository = TransactionRepository(database.transactionDao())
+
+        // 2. Siapkan Factory
+        val viewModelFactory = DashboardViewModelFactory(repository)
+
         setContent {
-            // 2. Bungkus dengan FluxTheme
-            // Penting biar warna Background gelap (0xFF0B0E14) otomatis kepasang
             FluxTheme {
-                // 3. Panggil Layar Utama
-                // Karena tadi kita udah pasang NavHost di dalem DashboardScreen,
-                // Navigasi bakal langsung jalan dari sini.
-                DashboardScreen()
+                // 3. Kita inject ViewModel pakai Factory ini ke DashboardScreen
+                // Caranya: Kita panggil ViewModel-nya DISINI, lalu oper ke DashboardScreen
+                val viewModel: DashboardViewModel = viewModel(factory = viewModelFactory)
+
+                DashboardScreen(viewModel = viewModel)
             }
         }
     }
