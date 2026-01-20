@@ -29,4 +29,8 @@ interface TransactionDao {
     // 5. Hitung Total Pengeluaran
     @Query("SELECT SUM(amount) FROM transactions WHERE isIncome = 0")
     fun getTotalExpense(): Flow<Double?>
+
+    // 6. Perintah Hapus berdasarkan ID
+    @Query("DELETE FROM transactions WHERE id = :id")
+    suspend fun deleteById(id: Int)
 }

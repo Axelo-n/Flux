@@ -134,7 +134,20 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
                 // ... Rute Home & Placeholders SAMA SEPERTI SEBELUMNYA ...
                 composable(FluxRoutes.HOME) { HomeScreen(viewModel = viewModel) }
                 composable(FluxRoutes.ANALYTICS) { PlaceholderScreen("Analytics") }
-                composable(FluxRoutes.HISTORY) { PlaceholderScreen("History") }
+                composable(FluxRoutes.HISTORY) {
+                    HistoryScreen(
+//                        viewModel = viewModel,
+//                        onBack = {
+//                            // Aksi tombol silang (X) -> Balik ke Home
+//                            navController.navigate(FluxRoutes.HOME) {
+//                                popUpTo(FluxRoutes.HOME) { inclusive = true }
+//                            }
+//                        },
+//                        onEditClick = { transaction ->
+//                            // Todo Edit
+//                        }
+                    )
+                }
                 composable(FluxRoutes.WALLET) { PlaceholderScreen("Wallet") }
 
                 // RUTE BARU: ADD TRANSACTION
@@ -523,8 +536,8 @@ fun TransactionRowItem(transaction: Transaction) {
             Icon(
                 painter = painterResource(id = transaction.iconRes),
                 contentDescription = null,
-                tint = UIWhite, // Icon selalu putih
-                modifier = Modifier.size(22.dp)
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
             )
         }
 

@@ -7,9 +7,12 @@ data class Transaction(
     val id: Int,
     val title: String,
     val category: String,
-    val amount: Double,           // Buat hitungan logika
-    val formattedAmount: String,  // Buat tampilan teks (Rp ...)
+    val amount: Double,
+    val formattedAmount: String,
+
+    // GANTI JADI INT (Karena R.drawable itu isinya Angka)
     val iconRes: Int,
+
     val iconBgColor: Color,
     val isIncome: Boolean
 )

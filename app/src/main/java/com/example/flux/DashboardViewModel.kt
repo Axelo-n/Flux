@@ -56,7 +56,7 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
                 // 2. Convert Entity (Database) ke UI Model (Tampilan)
                 val uiTransactions = txList.map { entity ->
                     // Logic milih Icon & Warna berdasarkan Kategori
-                    val (icon, color) = getCategoryStyle(entity.category, entity.isIncome)
+                    val (iconId, color) = getCategoryStyle(entity.category, entity.isIncome)
 
                     Transaction(
                         id = entity.id,
@@ -64,7 +64,7 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
                         category = entity.category,
                         amount = entity.amount,
                         formattedAmount = formatRupiah(entity.amount),
-                        iconRes = icon,
+                        iconRes = iconId,
                         iconBgColor = color,
                         isIncome = entity.isIncome
                     )
@@ -110,6 +110,39 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             }
         }
     }
+
+    fun deleteTransaction(id: Int) {
+        viewModelScope.launch {
+            repository.delete(id)
+        }
+    }
+}
+
+private fun getCategoryStyle(category: String, isIncome: Boolean): Pair<Int, Color> {
+    // 1. Warna Background (Bisa disesuaikan)
+    val color = when (category) {
+        "Food" -> Color(0xFFFF6D00)
+        "Transport" -> Color(0xFF00C853)
+        "Shopping" -> Color(0xFF7C4DFF)
+        "Salary" -> Color(0xFF536DFE)
+        else -> Color(0xFF90A4AE) // Warna Default
+    }
+
+    // 2. Icon Resource (R.drawable.xxx)
+    val iconRes = if (isIncome) {
+        R.drawable.ic_card_outline // Pastikan file ini ada
+    } else {
+        when (category) {
+            "Food" -> R.drawable.ic_food_outline
+            "Transport" -> R.drawable.ic_car_outline
+            "Shopping" -> R.drawable.ic_cart_outline
+            "Entertainment" -> R.drawable.ic_ticket_outline
+            "Clothes" -> R.drawable.ic_bag_outline
+            else -> R.drawable.ic_other_outline // Icon default (titik tiga/tanda tanya)
+        }
+    }
+
+    return Pair(iconRes, color)
 }
 
 // --- PABRIK VIEWMODEL (FACTORY) ---
