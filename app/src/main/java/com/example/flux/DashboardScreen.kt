@@ -453,7 +453,7 @@ fun SpendingGraphSection(dataPoints: List<DayData>) {
                                 val isOver = dayData.amount > dayData.limit
                                 val pointColor = if (isOver) UIRed else UIGreen
 
-                                drawCircle(color = UIBackground, radius = 6.dp.toPx(), center = offset) // Border
+                                drawCircle(color = pointColor, radius = 6.dp.toPx(), center = offset) // Border
                                 drawCircle(color = pointColor, radius = 4.dp.toPx(), center = offset) // Isi
                             }
                         }

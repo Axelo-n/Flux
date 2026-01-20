@@ -265,7 +265,8 @@ fun EditTransactionScreen(
                         amount = amountDouble,
                         note = note,
                         category = selectedCategory,
-                        isIncome = isIncome
+                        isIncome = isIncome,
+                        date = transaction.date
                     )
                     onBack()
                 },

@@ -85,7 +85,7 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
     }
 
     // 1. Fungsi Update Data ke Database
-    fun updateTransaction(id: Int, amount: Double, note: String, category: String, isIncome: Boolean) {
+    fun updateTransaction(id: Int, amount: Double, note: String, category: String, isIncome: Boolean, date: Long) {
         viewModelScope.launch {
             val updateTx = TransactionEntity(
                 id = id, // ID lama wajib dibawa biar dia tau mana yang ditimpa
@@ -94,7 +94,7 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
                 category = category,
                 isIncome = isIncome,
                 // Kita pertahankan tanggal lama (kalau mau update tanggal jadi "sekarang", ganti jadi System.currentTimeMillis())
-                date = System.currentTimeMillis()
+                date = date
             )
             repository.insert(updateTx) // Di Room, @Insert(onConflict = REPLACE) itu otomatis jadi UPDATE kalau ID-nya sama
         }
@@ -113,17 +113,23 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         return format.format(amount).replace("Rp", "Rp ")
     }
 
-    // Helper: Milih Icon & Warna
     private fun getCategoryStyle(category: String, isIncome: Boolean): Pair<Int, Color> {
-        return if (isIncome) {
-            Pair(R.drawable.ic_wallet_outline, CatBlue) // Default Income Icon
-        } else {
-            when (category) {
-                "Food" -> Pair(R.drawable.ic_food_outline, CatOrange)
-                "Transport" -> Pair(R.drawable.ic_cart_outline, CatPurple) // Ganti icon transport kalo ada
-                "Shopping" -> Pair(R.drawable.ic_cart_outline, CatPurple)
-                else -> Pair(R.drawable.ic_history_outline, UIGray)
-            }
+        // 1. Kalau Income, iconnya Wallet warna Biru (atau sesuaikan)
+        if (isIncome) {
+            return Pair(R.drawable.ic_wallet_outline, CatBlue)
+        }
+
+        // 2. Kalau Expense, Cek String Kategorinya (HARUS SAMA PERSIS SAMA ADD SCREEN)
+        return when (category) {
+            "Food and Beverages" -> Pair(R.drawable.ic_food_outline, CatOrange)
+            "Transportation" -> Pair(R.drawable.ic_car_outline, CatGreen)
+            "Groceries and Shopping" -> Pair(R.drawable.ic_cart_outline, CatPurple)
+            "Entertainment" -> Pair(R.drawable.ic_ticket_outline, CatYellow)
+            "Account Transfer" -> Pair(R.drawable.ic_card_outline, CatBlue) // Atau icon transfer lain
+            "Other" -> Pair(R.drawable.ic_other_outline, CatGrey)
+
+            // Fallback kalau nama kategori ga dikenali
+            else -> Pair(R.drawable.ic_other_outline, CatGrey)
         }
     }
 
