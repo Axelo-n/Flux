@@ -1,5 +1,6 @@
 package com.example.flux
 
+import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -38,9 +39,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,12 +54,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -133,7 +140,7 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
             ) {
                 // ... Rute Home & Placeholders SAMA SEPERTI SEBELUMNYA ...
                 composable(FluxRoutes.HOME) { HomeScreen(viewModel = viewModel) }
-                composable(FluxRoutes.ANALYTICS) { PlaceholderScreen("Analytics") }
+                composable(FluxRoutes.ANALYTICS) { PlaceholderScreen("Coming Soon") }
                 composable(FluxRoutes.HISTORY) {
                     HistoryScreen(
                         viewModel = viewModel,
@@ -760,12 +767,34 @@ fun BottomSpacer(){
 
 @Composable
 fun HomeScreen(
-    // Kita pindahin ViewModel ke sini
     viewModel: DashboardViewModel
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    // Ini LazyColumn yang tadinya ada di DashboardScreen
+    // --- TAMBAHAN LOGIC CEK STATUS SYSTEM ---
+    val context = LocalContext.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var isListenerActive by remember { mutableStateOf(false) }
+
+    // Fungsi Cek Izin Notifikasi
+    fun checkStatus() {
+        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        isListenerActive = flat != null && flat.contains(context.packageName)
+    }
+
+    // Cek setiap kali layar tampil (Resume)
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                checkStatus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        checkStatus() // Cek awal
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // ----------------------------------------
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -773,7 +802,8 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
         contentPadding = PaddingValues(bottom = 150.dp, top = 20.dp)
     ) {
-        item { HeaderSection(isActive = state.isListenerActive) }
+        // GANTI state.isListenerActive JADI variabel lokal isListenerActive
+        item { HeaderSection(isActive = isListenerActive) }
 
         item {
             BudgetGridSection(
@@ -786,7 +816,7 @@ fun HomeScreen(
             BalanceRowSection(
                 currentBalance = state.currentBalance,
                 extraBalance = state.extraBalance,
-                isPositive = state.isExtraBalancePositive // <--- Kiri data boolean ini
+                isPositive = state.isExtraBalancePositive
             )
         }
 

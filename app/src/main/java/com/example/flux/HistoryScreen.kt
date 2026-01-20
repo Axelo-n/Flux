@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -315,12 +316,16 @@ fun TransactionItemUI(
             Text(
                 text = data.title,
                 style = AppFont.Medium.copy(fontSize = 18.sp, color = UIWhite),
-                modifier = Modifier.offset(y = (2).dp)
+                modifier = Modifier.offset(y = (2).dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = data.category,
                 style = AppFont.Regular.copy(fontSize = 14.sp, color = UIGray),
-                modifier = Modifier.offset(y = (-2).dp)
+                modifier = Modifier.offset(y = (-2).dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
 

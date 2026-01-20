@@ -7,7 +7,6 @@ class TransactionRepository(private val transactionDao: TransactionDao) {
     // Ambil semua data (Live update)
     val allTransactions: Flow<List<TransactionEntity>> = transactionDao.getAllTransactions()
 
-    // Hitung total (Live update)
     val totalIncome: Flow<Double?> = transactionDao.getTotalIncome()
     val totalExpense: Flow<Double?> = transactionDao.getTotalExpense()
 

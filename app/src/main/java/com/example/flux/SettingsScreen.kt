@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
@@ -34,15 +35,47 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.flux.ui.theme.*
 import androidx.core.graphics.toColorInt
+import android.provider.Settings
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 @Composable
 fun SettingsScreen(viewModel: DashboardViewModel) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val scrollState = rememberScrollState()
 
     // State untuk input nominal suntikan dana
     var injectionAmount by remember { mutableStateOf("") }
+
+    fun checkNotificationServiceAccess(): Boolean {
+        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        return flat != null && flat.contains(context.packageName)
+    }
+
+    // State buat nyimpen status izin (True = Active, False = Inactive)
+    var isServiceActive by remember { mutableStateOf(checkNotificationServiceAccess()) }
+
+    // Auto-refresh status pas kita balik dari Setting HP
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isServiceActive = checkNotificationServiceAccess()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Cek apakah user SUDAH kasih izin baca notifikasi?
+    fun isNotificationListenerEnabled(context: Context): Boolean {
+        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        return flat != null && flat.contains(context.packageName)
+    }
+
+    // State real-time buat UI switch
+    var isAccessGranted by remember { mutableStateOf(isNotificationListenerEnabled(context)) }
 
     // Launcher Izin Notifikasi
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -78,6 +111,7 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
         SectionLabel("GENERAL")
 
         // Voice Listener Card
+        // --- 1. LISTENER TOGGLE (UPDATED) ---
         FluxCard(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -87,29 +121,31 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Icon Mic
-//                    Box(
-//                        modifier = Modifier
-//                            .size(44.dp)
-//                            .clip(CircleShape)
-//                            .background(if (state.isListenerActive) UITeal.copy(alpha = 0.2f) else UIGray.copy(alpha = 0.1f)),
-//                        contentAlignment = Alignment.Center
-//                    ) {
-//                        Icon(
-//                            imageVector = Icons.Outlined.Mic,
-//                            contentDescription = null,
-//                            tint = if (state.isListenerActive) UITeal else UIGray
-//                        )
-//                    }
-//
-//                    Spacer(modifier = Modifier.width(16.dp))
+                    // Icon Status (Hijau kalau Active, Abu kalau Mati)
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (isServiceActive) UITeal.copy(alpha = 0.2f) else UIGray.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Ganti icon mic jadi icon yang relevan (misal radar/sync)
+                        Icon(
+                            painter = painterResource(R.drawable.flux_transparent),
+                            contentDescription = null,
+                            tint = if (isServiceActive) UITeal else UIGray,
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
 
                     Column {
-                        Text("Voice Listener", style = AppFont.Bold.copy(color = UIWhite, fontSize = 16.sp))
+                        Text("Auto-Record", style = AppFont.Bold.copy(color = UIWhite, fontSize = 16.sp))
                         Text(
-                            if (state.isListenerActive) "Listening..." else "Paused",
+                            if (isServiceActive) "Running in background" else "Permission needed",
                             style = AppFont.Medium.copy(
-                                color = if (state.isListenerActive) UITeal else UIGray,
+                                color = if (isServiceActive) UITeal else UIGray,
                                 fontSize = 12.sp
                             )
                         )
@@ -117,17 +153,25 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                 }
 
                 Switch(
-                    checked = state.isListenerActive,
-                    onCheckedChange = { viewModel.toggleListener() },
+                    checked = isServiceActive,
+                    onCheckedChange = {
+                        // Kita ga bisa maksa nyalain, user harus ke Setting HP
+                        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                        context.startActivity(intent)
+                    },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = UIWhite,
                         checkedTrackColor = UITeal,
                         uncheckedThumbColor = UIGray,
-                        uncheckedTrackColor = UIBlack,
-                        uncheckedBorderColor = UIGray
+                        uncheckedTrackColor = UIBlack
                     )
                 )
             }
+        }
+
+        DisposableEffect(Unit) {
+            val onResume = { isAccessGranted = isNotificationListenerEnabled(context) }
+            onDispose { }
         }
 
         // Notification Test Card
@@ -290,7 +334,7 @@ fun showDummyNotification(context: Context) {
     val accentColor = "#0B0E14".toColorInt()
 
     val notification = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.drawable.flux_title) // Pastikan icon ada
+        .setSmallIcon(R.drawable.flux_transparent) // Pastikan icon ada
         .setColor(accentColor)
         .setContentTitle("Flux Budget Alert")
         .setContentText("You've used 80% of your daily budget!")

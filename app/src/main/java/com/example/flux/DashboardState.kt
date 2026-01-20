@@ -36,7 +36,5 @@ data class DashboardState(
 
     // Pastikan dua ini ada:
     val dailyUsagePercent: Float = 0f,
-    val isListenerActive: Boolean = false, // <-- Tambahan baru biar Header ga merah
-
     val graphData: List<DayData> = emptyList()
 )
