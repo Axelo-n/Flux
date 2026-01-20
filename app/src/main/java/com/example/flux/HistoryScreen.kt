@@ -12,7 +12,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,6 +26,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.flux.ui.theme.*
+import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 // --- DATA MODEL UI DUMMY (Disesuaikan pake Int/Drawable) ---
 data class DummyTransaction(
@@ -36,25 +44,58 @@ data class DummyTransaction(
 
 @Composable
 fun HistoryScreen(
-    viewModel: DashboardViewModel, // Tambah ini
-    navController: NavController,  // Tambah ini
-    onBack: () -> Unit             // Tambah ini
+    viewModel: DashboardViewModel,
+    navController: NavController,
+    onBack: () -> Unit
 ) {
-    // 1. Ambil Data Real
+    // 1. Ambil Data Real dari ViewModel
     val state by viewModel.uiState.collectAsState()
-    val transactions = state.recentTransactions
+    val allTransactions = state.recentTransactions
 
-    // 2. Grouping Data (Simulasi tanggal hari ini dulu)
-    val groupedTransactions = remember(transactions) {
-        transactions.groupBy {
-            // Nanti ganti ini dengan tanggal asli dari DB
-            "Today"
+    // --- LOGIKA FILTER WAKTU ---
+    val calendar = Calendar.getInstance()
+
+    // State untuk Filter (Default ke Bulan & Tahun Sekarang)
+    var selectedMonthIndex by remember { mutableIntStateOf(calendar.get(Calendar.MONTH)) } // 0 = Jan, 11 = Dec
+    var selectedYear by remember { mutableIntStateOf(calendar.get(Calendar.YEAR)) }
+
+    // List Pilihan untuk Dropdown
+    val months = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+    val years = (2024..2030).toList() // Bisa disesuaikan range tahunnya
+
+    // 2. FILTERING DATA (Core Logic)
+    // Kita filter data 'allTransactions' berdasarkan state bulan & tahun di atas
+    val filteredTransactions = remember(allTransactions, selectedMonthIndex, selectedYear) {
+        allTransactions.filter { tx ->
+            val txCalendar = Calendar.getInstance()
+            txCalendar.timeInMillis = tx.date // Asumsi tx.date adalah Long (timestamp)
+
+            val txMonth = txCalendar.get(Calendar.MONTH)
+            val txYear = txCalendar.get(Calendar.YEAR)
+
+            txMonth == selectedMonthIndex && txYear == selectedYear
         }
     }
 
-    // 3. Hitung Total Saldo Real
-    val totalBalance = remember(transactions) {
-        transactions.sumOf { if (it.isIncome) it.amount else -it.amount }
+    // 3. GROUPING DATA (Berdasarkan Tanggal)
+    val groupedTransactions = remember(filteredTransactions) {
+        filteredTransactions
+            .sortedByDescending { it.date } // Urutkan dari yang terbaru
+            .groupBy {
+                SimpleDateFormat("dd", Locale.getDefault()).format(Date(it.date))
+            }
+    }
+
+    // 4. HITUNG TOTAL SALDO (Hanya dari data yang sudah difilter)
+    val totalBalance = remember(filteredTransactions) {
+        filteredTransactions.sumOf { if (it.isIncome) it.amount else -it.amount }
+    }
+
+    // Helper Format Rupiah
+    fun formatRupiah(amount: Double): String {
+        val format = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
+        format.maximumFractionDigits = 0
+        return format.format(amount).replace("Rp", "Rp ")
     }
 
     Scaffold(
@@ -65,37 +106,49 @@ fun HistoryScreen(
                     .fillMaxWidth()
                     .padding(top = 48.dp, start = 20.dp, end = 20.dp)
             ) {
-                // 1. Tombol Close
+                // Tombol Close
                 Box(
                     modifier = Modifier
                         .size(50.dp)
                         .clip(CircleShape)
                         .background(UISurface)
-                        .clickable { /* Aksi Dummy */ }
+                        .clickable { onBack() }
                         .align(Alignment.TopStart),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_close),
+                        painter = painterResource(R.drawable.ic_close), // Pastikan ada di drawable
                         contentDescription = "Close",
                         tint = UIWhite
                     )
                 }
 
-                // 2. Total Balance & Filter
+                // Total Balance & Filter Aktif
                 Column(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Tampilkan Total Balance Hasil Perhitungan
                     Text(
-                        text = "Rp 1.234.000",
+                        text = formatRupiah(totalBalance),
                         style = AppFont.Bold.copy(fontSize = 32.sp, color = UIWhite)
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterPillUI(text = "January")
-                        FilterPillUI(text = "2026")
+                        // --- DROPDOWN BULAN ---
+                        DropdownFilter(
+                            label = months[selectedMonthIndex],
+                            items = months,
+                            onItemSelected = { index, _ -> selectedMonthIndex = index }
+                        )
+
+                        // --- DROPDOWN TAHUN ---
+                        DropdownFilter(
+                            label = selectedYear.toString(),
+                            items = years.map { it.toString() },
+                            onItemSelected = { _, item -> selectedYear = item.toInt() }
+                        )
                     }
                 }
             }
@@ -105,42 +158,88 @@ fun HistoryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = 170.dp, start = 10.dp, end = 10.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 35.dp,
-                        topEnd = 35.dp,
-                        bottomStart = 0.dp,
-                        bottomEnd = 0.dp
-                        )
-                    )
+                .clip(RoundedCornerShape(topStart = 35.dp, topEnd = 35.dp))
                 .background(UISurface)
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                contentPadding = PaddingValues(top = 20.dp, bottom = 100.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Loop setiap grup tanggal
-                groupedTransactions.forEach { (date, txList) ->
-
-                    // Header Tanggal
-                    item { DateHeaderUI(date) }
-
-                    // List Item di tanggal tersebut
-                    items(txList) { transaction ->
-                        TransactionItemUI(
-                            data = transaction,
-                            onClick = {
-                                // NAVIGASI KE HALAMAN EDIT
-                                navController.navigate("edit_transaction/${transaction.id}")
-                            }
-                        )
-                    }
-
-                    item { Spacer(modifier = Modifier.height(10.dp)) }
+            if (filteredTransactions.isEmpty()) {
+                // Tampilan kalau data kosong di bulan tsb
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No transactions in this period", style = AppFont.Regular.copy(color = UIGray))
                 }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp),
+                    contentPadding = PaddingValues(top = 20.dp, bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    groupedTransactions.forEach { (date, txList) ->
+                        item { DateHeaderUI(date) }
+                        items(txList) { transaction ->
+                            TransactionItemUI(
+                                data = transaction,
+                                onClick = {
+                                    navController.navigate("edit_transaction/${transaction.id}")
+                                }
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(10.dp)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// --- KOMPONEN DROPDOWN CUSTOM ---
+@Composable
+fun DropdownFilter(
+    label: String,
+    items: List<String>,
+    onItemSelected: (index: Int, item: String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        // Tombol Pill (Trigger)
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(brush = gradientBrush)
+                .clickable { expanded = true } // Buka menu pas diklik
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = AppFont.Bold.copy(fontSize = 14.sp, color = UIBackground)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                painter = painterResource(R.drawable.ic_dropdown), // Pastikan ada icon dropdown/arrow down
+                contentDescription = null,
+                tint = UIBackground,
+                modifier = Modifier.size(10.dp)
+            )
+        }
+
+        // Menu Dropdown
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(UISurface).heightIn(max = 200.dp) // Max height biar bisa scroll
+        ) {
+            items.forEachIndexed { index, item ->
+                DropdownMenuItem(
+                    text = {
+                        Text(text = item, color = if(item == label) UITeal else UIWhite)
+                    },
+                    onClick = {
+                        onItemSelected(index, item)
+                        expanded = false
+                    }
+                )
             }
         }
     }

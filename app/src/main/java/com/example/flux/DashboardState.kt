@@ -14,7 +14,8 @@ data class Transaction(
     val iconRes: Int,
 
     val iconBgColor: Color,
-    val isIncome: Boolean
+    val isIncome: Boolean,
+    val date: Long
 )
 
 // 2. Model Data Grafik

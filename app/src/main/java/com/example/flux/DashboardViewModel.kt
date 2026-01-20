@@ -66,7 +66,8 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
                         formattedAmount = formatRupiah(entity.amount),
                         iconRes = iconId,
                         iconBgColor = color,
-                        isIncome = entity.isIncome
+                        isIncome = entity.isIncome,
+                        date = entity.date
                     )
                 }
 

@@ -700,7 +700,8 @@ fun getDummyTransactions(): List<Transaction> {
             formattedAmount = "+ Rp 150.000",
             iconRes = R.drawable.ic_card_outline,
             iconBgColor = CatBlue,
-            isIncome = true
+            isIncome = true,
+            date = System.currentTimeMillis()
         ),
         Transaction(
             id = 2,
@@ -710,7 +711,8 @@ fun getDummyTransactions(): List<Transaction> {
             formattedAmount = "- Rp 19.000",
             iconRes = R.drawable.ic_food_outline,
             iconBgColor = CatOrange,
-            isIncome = false
+            isIncome = false,
+            date = System.currentTimeMillis()
         ),
         Transaction(
             id = 3,
@@ -720,7 +722,8 @@ fun getDummyTransactions(): List<Transaction> {
             formattedAmount = "- Rp 148.300",
             iconRes = R.drawable.ic_cart_outline,
             iconBgColor = CatPurple,
-            isIncome = false
+            isIncome = false,
+            date = System.currentTimeMillis() - 86400000
         )
     )
 }
@@ -827,7 +830,8 @@ fun TransactionItemPreview() {
             formattedAmount = "Rp 150.000",
             iconRes = R.drawable.ic_card_outline,
             iconBgColor = CatBlue,
-            isIncome = true
+            isIncome = true,
+            date = System.currentTimeMillis() - 86400000
         )
     )
 }
