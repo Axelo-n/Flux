@@ -251,7 +251,7 @@ fun HeaderSection(isActive: Boolean) {
 }
 
 @Composable
-fun BudgetGridSection(dailyLeft: String, weeklyPercent: Float) {
+fun BudgetGridSection(dailyLeft: String, dailyUsagePercent: Float) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(20.dp)
@@ -286,7 +286,7 @@ fun BudgetGridSection(dailyLeft: String, weeklyPercent: Float) {
             ) {
                 // Label Atas
                 Text(
-                    text = "Weekly Usage",
+                    text = "Daily Usage",
                     style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp)
                 )
 
@@ -313,7 +313,7 @@ fun BudgetGridSection(dailyLeft: String, weeklyPercent: Float) {
                         drawRoundRect(
                             brush = Brush.horizontalGradient(listOf(UITeal, UIBlue)),
                             cornerRadius = cornerRadius,
-                            size = size.copy(width = size.width * weeklyPercent)
+                            size = size.copy(width = size.width * dailyUsagePercent)
                         )
                     }
                 }
@@ -356,89 +356,86 @@ fun BalanceRowSection(currentBalance: String, extraBalance: String, isPositive: 
 
 @Composable
 fun SpendingGraphSection(dataPoints: List<DayData>) {
+    // Cari nilai tertinggi dari data untuk batas atas grafik (biar ga kepotong)
+    // Minimal 80k biar grafik ga keliatan kosong kalo expense dikit
+    val maxDataValue = dataPoints.maxOfOrNull { it.amount } ?: 80000f
+    val yAxisMax = maxOf(maxDataValue, 80000f) * 1.2f // Tambah buffer 20% diatas
+
     FluxCard(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp) // Gedein dikit biar lega
+            .height(220.dp) // Gedein dikit
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
 
             Row(modifier = Modifier.weight(1f)) {
-                // 1. Y-Axis Labels (Kiri)
+                // 1. Y-Axis Labels (Dinamis)
                 Column(
                     verticalArrangement = Arrangement.SpaceBetween,
                     horizontalAlignment = Alignment.End,
                     modifier = Modifier
                         .fillMaxHeight()
-                        .padding(bottom = 30.dp) // Samain padding bawah biar sejajar 20k
+                        .padding(bottom = 30.dp)
                 ) {
-                    val yLabels = listOf("100k", "80k", "60k", "40k", "20k")
-                    yLabels.forEach { label ->
+                    // Generate 5 label dari 0 sampe Max
+                    val step = yAxisMax / 4
+                    val labels = listOf(
+                        yAxisMax,
+                        yAxisMax - step,
+                        yAxisMax - (step * 2),
+                        yAxisMax - (step * 3),
+                        0f // Paling bawah 0
+                    )
+
+                    labels.forEach { value ->
                         Text(
-                            text = label,
-                            style = AppFont.SemiBold.copy(color = UIWhite, fontSize = 16.sp)
+                            text = "${(value / 1000).toInt()}k", // Format 100k
+                            style = AppFont.SemiBold.copy(color = UIWhite, fontSize = 12.sp)
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // 2. Graph Area (Kanan)
+                // 2. Graph Area
                 Column(modifier = Modifier.weight(1f)) {
-
-                    // CANVAS GRAPH
-                    Box(modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                    ) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
-                            // Padding internal biar titik ga kepotong garis
                             val paddingBottom = 10.dp.toPx()
                             val paddingTop = 10.dp.toPx()
+                            val drawingHeight = size.height - paddingBottom - paddingTop
 
-                            val width = size.width
-                            val height = size.height
-
-                            // Hitung area gambar efektif (biar ga nabrak atas/bawah)
-                            val drawingHeight = height - paddingBottom - paddingTop
-
-                            // Sumbu X & Y Lines
-                            // Garis Vertikal (Kiri)
+                            // Garis Axis
                             drawLine(
-                                color = UIWhite,
+                                color = UIWhite.copy(alpha = 0.5f),
                                 start = Offset(0f, 0f),
-                                end = Offset(0f, height), // Full height
-                                strokeWidth = 2.dp.toPx(),
-                                cap = StrokeCap.Round
+                                end = Offset(0f, size.height),
+                                strokeWidth = 2.dp.toPx()
                             )
-                            // Garis Horizontal (Bawah)
                             drawLine(
-                                color = UIWhite,
-                                start = Offset(0f, height),
-                                end = Offset(width, height),
-                                strokeWidth = 2.dp.toPx(),
-                                cap = StrokeCap.Round
+                                color = UIWhite.copy(alpha = 0.5f),
+                                start = Offset(0f, size.height),
+                                end = Offset(size.width, size.height),
+                                strokeWidth = 2.dp.toPx()
                             )
 
-                            // Logic Koordinat (Kolom Based)
-                            val maxVal = 100f
-                            val minVal = 20f
-                            val range = maxVal - minVal
-                            val colWidth = if (dataPoints.isNotEmpty()) width / dataPoints.size else 0f // Lebar per kolom
+                            if (dataPoints.isEmpty()) return@Canvas
 
+                            val colWidth = size.width / dataPoints.size
+
+                            // Map Data ke Koordinat
                             val points = dataPoints.mapIndexed { index, dayData ->
-                                // X: Geser ke tengah kolom
-                                // (index * lebarKolom) + (setengah lebarKolom)
                                 val x = (index * colWidth) + (colWidth / 2f)
 
-                                // Y: Mapping nilai dengan padding
-                                val normalizedY = 1 - ((dayData.amount - minVal) / range)
-                                val y = paddingTop + (normalizedY * drawingHeight)
+                                // Rumus Y Dinamis: (Value / Max) * Height
+                                val yRatio = dayData.amount / yAxisMax
+                                // Invert Y (Karena canvas 0 nya di atas)
+                                val y = size.height - paddingBottom - (yRatio * drawingHeight)
 
                                 Offset(x, y)
                             }
 
-                            // Gambar Garis Penghubung
+                            // Gambar Garis
                             for (i in 0 until points.size - 1) {
                                 drawLine(
                                     color = UIWhite,
@@ -451,42 +448,29 @@ fun SpendingGraphSection(dataPoints: List<DayData>) {
 
                             // Gambar Titik
                             points.forEachIndexed { index, offset ->
-                                val isOver = dataPoints[index].amount > dataPoints[index].limit
+                                val dayData = dataPoints[index]
+                                // Logic warna titik: Merah kalo expense > limit hari itu
+                                val isOver = dayData.amount > dayData.limit
                                 val pointColor = if (isOver) UIRed else UIGreen
 
-                                drawCircle(
-                                    color = Color(0x00000000),
-                                    radius = 8.dp.toPx(), // Border luar
-                                    center = offset
-                                )
-                                drawCircle(
-                                    color = pointColor,
-                                    radius = 6.dp.toPx(), // Titik dalam
-                                    center = offset
-                                )
+                                drawCircle(color = UIBackground, radius = 6.dp.toPx(), center = offset) // Border
+                                drawCircle(color = pointColor, radius = 4.dp.toPx(), center = offset) // Isi
                             }
                         }
                     }
 
-                    // X-Axis Labels (Bawah Canvas)
-                    // Pake Row dengan Weight biar center-nya sama persis kayak kolom di canvas
+                    // X-Axis Labels
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp), // Jarak teks ke garis
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         dataPoints.forEach {
-                            Box(
-                                modifier = Modifier.weight(1f), // Bagi rata width-nya
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = it.day,
-                                    style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
+                            Text(
+                                text = it.day, // Mon, Tue
+                                style = AppFont.SemiBold.copy(color = UIGray, fontSize = 12.sp),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
@@ -792,7 +776,7 @@ fun HomeScreen(
         item {
             BudgetGridSection(
                 dailyLeft = state.dailyBudgetLeft,
-                weeklyPercent = state.weeklyUsagePercent
+                dailyUsagePercent = state.dailyUsagePercent
             )
         }
 

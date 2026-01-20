@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 class DashboardViewModel(private val repository: TransactionRepository) : ViewModel() {
@@ -39,28 +41,16 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
 
     private fun observeDatabase() {
         viewModelScope.launch {
-            // Kita gabungin 3 sumber data: List Transaksi, Total Income, Total Expense
-            combine(
-                repository.allTransactions,
-                repository.totalIncome,
-                repository.totalExpense
-            ) { transactions, income, expense ->
-                Triple(transactions, income ?: 0.0, expense ?: 0.0)
-            }.collect { (txList, totalIn, totalEx) ->
+            // Kita pantau terus perubahan di list transaksi
+            repository.allTransactions.collect { txList ->
 
-                // 1. Hitung Saldo
-                val currentBalance = totalIn - totalEx
-                val balanceFormatted = formatRupiah(currentBalance)
-                val extraFormatted = formatRupiah(totalIn) // Semenatara pake total income buat extra
-
-                // 2. Convert Entity (Database) ke UI Model (Tampilan)
+                // 1. Convert Entity (Database) ke UI Model (Tampilan)
                 val uiTransactions = txList.map { entity ->
-                    // Logic milih Icon & Warna berdasarkan Kategori
                     val (iconId, color) = getCategoryStyle(entity.category, entity.isIncome)
 
                     Transaction(
                         id = entity.id,
-                        title = entity.note.ifEmpty { entity.category }, // Kalo note kosong, pake nama kategori
+                        title = entity.note.ifEmpty { entity.category },
                         category = entity.category,
                         amount = entity.amount,
                         formattedAmount = formatRupiah(entity.amount),
@@ -71,20 +61,23 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
                     )
                 }
 
-                // 3. Logic Grafik Sederhana (Dummy logic biar grafik gerak dulu)
-                // Nanti kita update biar real berdasarkan tanggal
-                val graphData = _uiState.value.graphData // Pake data lama dulu
+                // 2. HITUNG ANALYTICS (Panggil Otak Pintar Kita Disini! 🧠)
+                // Ini yang kemarin belum dipanggil, makanya datanya ngaco
+                val analytics = calculateAnalytics(uiTransactions)
 
-                // 4. Update UI State
+                // 3. Update UI State dengan Data Real dari Analytics
                 _uiState.update { state ->
                     state.copy(
                         isLoading = false,
-                        currentBalance = balanceFormatted,
-                        extraBalance = extraFormatted,
-                        isExtraBalancePositive = true,
-                        recentTransactions = uiTransactions, // Data list udah real!
-                        dailyBudgetLeft = formatRupiah(60000.0 - (totalEx / 30)), // Simulasi sisa budget
-                        graphData = graphData
+                        recentTransactions = uiTransactions,
+
+                        // TIMPA DATA DUMMY DENGAN HASIL HITUNGAN ASLI:
+                        dailyBudgetLeft = analytics.dailyLeft,
+                        dailyUsagePercent = analytics.dailyUsagePercent,
+                        currentBalance = analytics.currentBalance,
+                        extraBalance = analytics.extraBalance,
+                        isExtraBalancePositive = analytics.isExtraPositive,
+                        graphData = analytics.graphData
                     )
                 }
             }
@@ -139,6 +132,105 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             repository.delete(id)
         }
     }
+
+    // --- LOGIC BUDGETING & ANALYTICS ---
+
+    fun calculateAnalytics(transactions: List<Transaction>): AnalyticsState {
+        val calendar = Calendar.getInstance()
+
+        // 1. Tentukan Tanggal Hari Ini
+        val todayDay = calendar.get(Calendar.DAY_OF_YEAR)
+        val todayYear = calendar.get(Calendar.YEAR)
+
+        // 2. Variable Penampung
+        var totalIncome = 0.0
+        var totalExpense = 0.0
+        var extraBalance = 0.0
+        // (Opsional: Logic kurangi 320k tiap senin bisa ditaruh di backend/worker,
+        // disini kita fokus ke kalkulasi transaksi berjalan dulu)
+
+        // Grouping transaksi per hari (Key: "DayOfYear-Year")
+        val txByDay = transactions.groupBy {
+            val c = Calendar.getInstance().apply { timeInMillis = it.date }
+            "${c.get(Calendar.DAY_OF_YEAR)}-${c.get(Calendar.YEAR)}"
+        }
+
+        // 3. Loop Kalkulasi Extra Balance (Income - Overbudget)
+        // Kita iterasi per hari yang ada transaksinya
+        txByDay.forEach { (_, txList) ->
+            // Ambil tanggal dari salah satu transaksi di grup ini buat cek hari apa
+            val txDate = Calendar.getInstance().apply { timeInMillis = txList.first().date }
+            val dayOfWeek = txDate.get(Calendar.DAY_OF_WEEK)
+
+            // Logic Limit: Sabtu(7) & Minggu(1) = 60k, Lainnya = 40k
+            val dailyLimit = if (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY) 60000.0 else 40000.0
+
+            val daysIncome = txList.filter { it.isIncome }.sumOf { it.amount }
+            val daysExpense = txList.filter { !it.isIncome }.sumOf { it.amount }
+
+            totalIncome += daysIncome
+            totalExpense += daysExpense
+
+            // Logic: Income masuk ke Extra Balance
+            extraBalance += daysIncome
+
+            // Logic: Cek Sisa Budget Harian
+            val dailyLeft = dailyLimit - daysExpense
+
+            // Logic: Kalo minus (tembus budget), potong Extra Balance
+            if (dailyLeft < 0) {
+                extraBalance += dailyLeft // dailyLeft negatif, jadi otomatis ngurangin
+            }
+        }
+
+        // 4. Hitung Data Hari Ini (Untuk Card Pojok Kiri Atas)
+        val dayOfWeekToday = calendar.get(Calendar.DAY_OF_WEEK)
+        val limitToday = if (dayOfWeekToday == Calendar.SATURDAY || dayOfWeekToday == Calendar.SUNDAY) 60000.0 else 40000.0
+
+        // Ambil transaksi hari ini doang
+        val todayTx = transactions.filter {
+            val c = Calendar.getInstance().apply { timeInMillis = it.date }
+            c.get(Calendar.DAY_OF_YEAR) == todayDay && c.get(Calendar.YEAR) == todayYear
+        }
+        val expenseToday = todayTx.filter { !it.isIncome }.sumOf { it.amount }
+        val dailyLeftToday = limitToday - expenseToday
+
+        // 5. Hitung Weekly Percent (Untuk Battery Bar)
+        // Asumsi total budget seminggu = 320.000 (40k*5 + 60k*2)
+        // Kita hitung pengeluaran minggu ini saja
+        val expenseThisWeek = 0.0 // (Implementasi filter minggu ini bisa ditambahkan disini)
+        // Buat simpel, kita pake dummy logic persentase hari ini thd limit
+        val dailyUsagePercent = (expenseToday / limitToday).toFloat().coerceIn(0f, 1f)
+
+
+        // 6. Siapkan Data Graph (7 Hari Terakhir)
+        val graphData = (0..6).map { i ->
+            val c = Calendar.getInstance()
+            c.add(Calendar.DAY_OF_YEAR, -((6 - i))) // Mundur dari H-6 sampai Hari H
+
+            val dKey = "${c.get(Calendar.DAY_OF_YEAR)}-${c.get(Calendar.YEAR)}"
+            val dOfWeek = c.get(Calendar.DAY_OF_WEEK)
+            val dLimit = if (dOfWeek == Calendar.SATURDAY || dOfWeek == Calendar.SUNDAY) 60000f else 40000f
+
+            // Cari total expense di hari tersebut
+            val tList = txByDay[dKey] ?: emptyList()
+            val dExpense = tList.filter { !it.isIncome }.sumOf { it.amount }.toFloat()
+
+            // Format Label Hari (Mon, Tue)
+            val dayLabel = SimpleDateFormat("EEE", Locale.getDefault()).format(c.time)
+
+            DayData(dayLabel, dExpense, dLimit)
+        }
+
+        return AnalyticsState(
+            dailyLeft = formatRupiah(dailyLeftToday),
+            dailyUsagePercent = dailyUsagePercent,
+            currentBalance = formatRupiah(totalIncome - totalExpense),
+            extraBalance = formatRupiah(extraBalance), // Udah bersih (tanpa +)
+            isExtraPositive = extraBalance >= 0,
+            graphData = graphData
+        )
+    }
 }
 
 private fun getCategoryStyle(category: String, isIncome: Boolean): Pair<Int, Color> {
@@ -167,6 +259,16 @@ private fun getCategoryStyle(category: String, isIncome: Boolean): Pair<Int, Col
 
     return Pair(iconRes, color)
 }
+
+// Helper Class buat return banyak data sekaligus
+data class AnalyticsState(
+    val dailyLeft: String,
+    val dailyUsagePercent: Float,
+    val currentBalance: String,
+    val extraBalance: String,
+    val isExtraPositive: Boolean,
+    val graphData: List<DayData>
+)
 
 // --- PABRIK VIEWMODEL (FACTORY) ---
 // Ini wajib ada biar kita bisa nyuntik Repository ke ViewModel

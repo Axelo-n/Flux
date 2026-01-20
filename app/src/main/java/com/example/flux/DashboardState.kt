@@ -27,19 +27,16 @@ data class DayData(
 
 // 3. State Utama (Kumpulan semua data yang tampil di layar)
 data class DashboardState(
-    val isLoading: Boolean = false,
-    val isListenerActive: Boolean = true,
-
-    // Header Data
+    val isLoading: Boolean = true,
+    val recentTransactions: List<Transaction> = emptyList(),
     val currentBalance: String = "Rp 0",
     val extraBalance: String = "Rp 0",
     val isExtraBalancePositive: Boolean = true,
-
-    // Budget Data
     val dailyBudgetLeft: String = "Rp 0",
-    val weeklyUsagePercent: Float = 0.0f, // 0.0 sampai 1.0
 
-    // List Data
-    val graphData: List<DayData> = emptyList(),
-    val recentTransactions: List<Transaction> = emptyList()
+    // Pastikan dua ini ada:
+    val dailyUsagePercent: Float = 0f,
+    val isListenerActive: Boolean = false, // <-- Tambahan baru biar Header ga merah
+
+    val graphData: List<DayData> = emptyList()
 )
