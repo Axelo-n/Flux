@@ -90,6 +90,28 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         }
     }
 
+    // 1. Fungsi Update Data ke Database
+    fun updateTransaction(id: Int, amount: Double, note: String, category: String, isIncome: Boolean) {
+        viewModelScope.launch {
+            val updateTx = TransactionEntity(
+                id = id, // ID lama wajib dibawa biar dia tau mana yang ditimpa
+                amount = amount,
+                note = note,
+                category = category,
+                isIncome = isIncome,
+                // Kita pertahankan tanggal lama (kalau mau update tanggal jadi "sekarang", ganti jadi System.currentTimeMillis())
+                date = System.currentTimeMillis()
+            )
+            repository.insert(updateTx) // Di Room, @Insert(onConflict = REPLACE) itu otomatis jadi UPDATE kalau ID-nya sama
+        }
+    }
+
+    // 2. Fungsi Helper buat Nyari Data (Dipake di Edit Screen)
+    fun getTransactionById(id: Int): Transaction? {
+        // Kita cari di list yang sekarang lagi tampil di layar (recentTransactions)
+        return _uiState.value.recentTransactions.find { it.id == id }
+    }
+
     // Helper: Format Rupiah
     private fun formatRupiah(amount: Double): String {
         val format = NumberFormat.getCurrencyInstance(Locale("id", "ID"))

@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,7 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource // PENTING BUAT R.drawable
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -28,21 +29,34 @@ import com.example.flux.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddTransactionScreen(
+fun EditTransactionScreen(
     viewModel: DashboardViewModel,
+    transactionId: Int,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    // State Input
-    var amount by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("Food") }
-    var isIncome by remember { mutableStateOf(false) }
+    // 1. Cari Data Lama
+    val transaction = viewModel.getTransactionById(transactionId)
 
-    // --- UPDATE: Mapping Kategori pake R.drawable ---
-    // Pastikan nama file icon (ic_food, ic_transport, dll) sesuai yang ada di folder drawable kamu
+    // Safety check: Kalau ID ga ketemu, balik.
+    if (transaction == null) {
+        LaunchedEffect(Unit) { onBack() }
+        return
+    }
+
+    // 2. State Form (Diisi Value Lama)
+    // .toInt() biar ga muncul .0 di belakang angka (misal 50000.0 jadi 50000)
+    var amount by remember { mutableStateOf(transaction.amount.toInt().toString()) }
+    var note by remember { mutableStateOf(transaction.title) }
+    var selectedCategory by remember { mutableStateOf(transaction.category) }
+    var isIncome by remember { mutableStateOf(transaction.isIncome) }
+
+    // State Dialog Delete
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // List Kategori (Sama kayak AddScreen)
     val categories = listOf(
         Triple("Food and Beverages", R.drawable.ic_food_outline, CatOrange),
         Triple("Transportation", R.drawable.ic_car_outline, CatGreen),
@@ -58,7 +72,7 @@ fun AddTransactionScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "New Transaction",
+                        "Edit Transaction",
                         style = AppFont.Bold.copy(fontSize = 20.sp, color = UIWhite)
                     )
                 },
@@ -71,7 +85,21 @@ fun AddTransactionScreen(
                                 .background(UISurface),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(painter = painterResource(R.drawable.ic_close), contentDescription = null, tint = UIWhite)
+                            Icon(Icons.Default.ArrowBack, contentDescription = null, tint = UIWhite)
+                        }
+                    }
+                },
+                actions = {
+                    // TOMBOL DELETE KHUSUS EDIT SCREEN
+                    IconButton(onClick = { showDeleteDialog = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(UIRed.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = UIRed)
                         }
                     }
                 },
@@ -112,7 +140,7 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(30.dp))
 
-            // --- 2. SWITCH INCOME / EXPENSE ---
+            // --- 2. SEGMENTED CONTROL ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -122,6 +150,7 @@ fun AddTransactionScreen(
                     .padding(4.dp)
             ) {
                 Row(modifier = Modifier.fillMaxSize()) {
+                    // Expense Option
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -134,7 +163,7 @@ fun AddTransactionScreen(
                     ) {
                         Text("Expense", style = AppFont.Bold.copy(color = if (!isIncome) UIRed else UIGray))
                     }
-
+                    // Income Option
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -152,14 +181,14 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(30.dp))
 
-            // --- 3. INPUT NOTE ---
+            // --- 3. NOTE INPUT ---
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text("Note", style = AppFont.Bold.copy(fontSize = 16.sp, color = UIWhite))
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },
-                    placeholder = { Text("Buy pizza for dinner...", color = UIGray.copy(0.5f)) },
+                    placeholder = { Text("Update note...", color = UIGray.copy(0.5f)) },
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = UISurface,
@@ -175,7 +204,7 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(30.dp))
 
-            // --- 4. CATEGORY GRID (Pake PainterResource) ---
+            // --- 4. CATEGORY GRID (Pre-selected) ---
             Text("Category", style = AppFont.Bold.copy(fontSize = 16.sp, color = UIWhite))
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -201,7 +230,6 @@ fun AddTransactionScreen(
                                     .border(width = 2.dp, color = if (isSelected) UIWhite.copy(0.2f) else Color.Transparent, shape = CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
-                                // GANTI PAKE PAINTER RESOURCE
                                 Icon(
                                     painter = painterResource(id = catIconRes),
                                     contentDescription = null,
@@ -218,7 +246,7 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // --- 5. TOMBOL SAVE ---
+            // --- 5. TOMBOL SAVE CHANGES ---
             Button(
                 onClick = {
                     val amountDouble = amount.toDoubleOrNull() ?: 0.0
@@ -231,7 +259,9 @@ fun AddTransactionScreen(
                         return@Button
                     }
 
-                    viewModel.addTransaction(
+                    // UPDATE TRANSACTION
+                    viewModel.updateTransaction(
+                        id = transactionId, // ID Penting buat update
                         amount = amountDouble,
                         note = note,
                         category = selectedCategory,
@@ -243,8 +273,22 @@ fun AddTransactionScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = UITeal),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Text("Save Transaction", style = AppFont.Bold.copy(fontSize = 16.sp, color = UIBackground))
+                Text("Save Changes", style = AppFont.Bold.copy(fontSize = 16.sp, color = UIBackground))
             }
+        }
+
+        // --- KONFIRMASI DELETE ---
+        if (showDeleteDialog) {
+            FluxAlertDialog(
+                title = "Delete Transaction?",
+                message = "Are you sure? This action cannot be undone.",
+                onDismiss = { showDeleteDialog = false },
+                onConfirm = {
+                    viewModel.deleteTransaction(transactionId)
+                    showDeleteDialog = false
+                    onBack()
+                }
+            )
         }
     }
 }

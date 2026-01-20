@@ -1,5 +1,6 @@
 package com.example.flux
 
+import android.R.attr.onClick
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -7,11 +8,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,6 +21,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.example.flux.ui.theme.*
 
 // --- DATA MODEL UI DUMMY (Disesuaikan pake Int/Drawable) ---
@@ -33,7 +35,28 @@ data class DummyTransaction(
 )
 
 @Composable
-fun HistoryScreen() {
+fun HistoryScreen(
+    viewModel: DashboardViewModel, // Tambah ini
+    navController: NavController,  // Tambah ini
+    onBack: () -> Unit             // Tambah ini
+) {
+    // 1. Ambil Data Real
+    val state by viewModel.uiState.collectAsState()
+    val transactions = state.recentTransactions
+
+    // 2. Grouping Data (Simulasi tanggal hari ini dulu)
+    val groupedTransactions = remember(transactions) {
+        transactions.groupBy {
+            // Nanti ganti ini dengan tanggal asli dari DB
+            "Today"
+        }
+    }
+
+    // 3. Hitung Total Saldo Real
+    val totalBalance = remember(transactions) {
+        transactions.sumOf { if (it.isIncome) it.amount else -it.amount }
+    }
+
     Scaffold(
         containerColor = UIBackground,
         topBar = {
@@ -81,7 +104,7 @@ fun HistoryScreen() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 170.dp)
+                .padding(top = 170.dp, start = 10.dp, end = 10.dp)
                 .clip(
                     RoundedCornerShape(
                         topStart = 35.dp,
@@ -99,19 +122,24 @@ fun HistoryScreen() {
                 contentPadding = PaddingValues(top = 20.dp, bottom = 100.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Group 19
-                item { DateHeaderUI("19") }
-                items(getDummyData19()) { item ->
-                    TransactionItemUI(item)
-                }
+                // Loop setiap grup tanggal
+                groupedTransactions.forEach { (date, txList) ->
 
-                // Group 18
-                item {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    DateHeaderUI("18")
-                }
-                items(getDummyData18()) { item ->
-                    TransactionItemUI(item)
+                    // Header Tanggal
+                    item { DateHeaderUI(date) }
+
+                    // List Item di tanggal tersebut
+                    items(txList) { transaction ->
+                        TransactionItemUI(
+                            data = transaction,
+                            onClick = {
+                                // NAVIGASI KE HALAMAN EDIT
+                                navController.navigate("edit_transaction/${transaction.id}")
+                            }
+                        )
+                    }
+
+                    item { Spacer(modifier = Modifier.height(10.dp)) }
                 }
             }
         }
@@ -153,10 +181,14 @@ fun DateHeaderUI(date: String) {
 }
 
 @Composable
-fun TransactionItemUI(data: DummyTransaction) {
+fun TransactionItemUI(
+    data: Transaction,
+    onClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onClick() }
             .padding(vertical = 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -165,7 +197,7 @@ fun TransactionItemUI(data: DummyTransaction) {
             modifier = Modifier
                 .size(50.dp)
                 .clip(CircleShape)
-                .background(data.iconBg),
+                .background(data.iconBgColor),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -195,10 +227,9 @@ fun TransactionItemUI(data: DummyTransaction) {
 
         // Amount
         Text(
-            text = data.amount,
+            text = data.formattedAmount, // GANTI: Pake formattedAmount dari ViewModel
             style = AppFont.Bold.copy(
                 fontSize = 18.sp,
-                // Asumsi warna UIGreen/UIRed ada di theme, kalau error ganti Color.Green/Red
                 color = if (data.isIncome) UIGreen else UIRed
             )
         )
@@ -207,25 +238,11 @@ fun TransactionItemUI(data: DummyTransaction) {
 
 // --- DATA DUMMY GENERATOR ---
 
-// Data Tanggal 19
-fun getDummyData19() = listOf(
-    DummyTransaction("Transfer from Michael", "Account Transfer", "Rp 150.000", true, R.drawable.ic_wallet_outline, CatBlue),
-    DummyTransaction("Warung Mba Sri", "Food and Beverages", "Rp 19.000", false, R.drawable.ic_food_outline, CatOrange),
-    DummyTransaction("Aeon Supermarket", "Groceries", "Rp 148.300", false, R.drawable.ic_cart_outline, CatPurple),
-)
-
-// Data Tanggal 18
-fun getDummyData18() = listOf(
-    DummyTransaction("GO-CAR", "Transportation", "Rp 21.000", false, R.drawable.ic_cart_outline, CatGreen), // Ganti icon transport kalo ada
-    DummyTransaction("M.Tix", "Entertainment", "Rp 90.000", false, R.drawable.ic_wallet_outline, CatYellow),
-    DummyTransaction("UNIQLO", "Clothes", "Rp 149.900", false, R.drawable.ic_cart_outline, CatPurple),
-)
-
-
-@Preview(showBackground = true)
-@Composable
-fun HistoryScreenPreview() {
-    FluxTheme {
-        HistoryScreen()
-    }
-}
+//
+//@Preview(showBackground = true)
+//@Composable
+//fun HistoryScreenPreview() {
+//    FluxTheme {
+//        HistoryScreen()
+//    }
+//}

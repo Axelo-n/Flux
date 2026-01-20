@@ -136,16 +136,12 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
                 composable(FluxRoutes.ANALYTICS) { PlaceholderScreen("Analytics") }
                 composable(FluxRoutes.HISTORY) {
                     HistoryScreen(
-//                        viewModel = viewModel,
-//                        onBack = {
-//                            // Aksi tombol silang (X) -> Balik ke Home
-//                            navController.navigate(FluxRoutes.HOME) {
-//                                popUpTo(FluxRoutes.HOME) { inclusive = true }
-//                            }
-//                        },
-//                        onEditClick = { transaction ->
-//                            // Todo Edit
-//                        }
+                        viewModel = viewModel,
+                        navController = navController, // Sekarang wajib dikirim!
+                        onBack = {
+                            // Aksi kalau tombol X ditekan -> Balik ke Home
+                            navController.popBackStack()
+                        }
                     )
                 }
                 composable(FluxRoutes.WALLET) { PlaceholderScreen("Wallet") }
@@ -153,15 +149,24 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
                 // RUTE BARU: ADD TRANSACTION
                 composable(FluxRoutes.ADD_TRANSACTION) {
                     AddTransactionScreen(
-                        onBack = { navController.popBackStack() },
-                        onSave = { amount, note, category, isIncome ->
-
-                            // PANGGIL VIEWMODEL BUAT SIMPAN KE DB
-                            viewModel.addTransaction(amount, note, category, isIncome)
-
-                            navController.popBackStack()
-                        }
+                        viewModel = viewModel, // Kirim ViewModel
+                        onBack = { navController.popBackStack() } // Kirim aksi back
                     )
+                }
+
+                composable("edit_transaction/{txId}") { backStackEntry ->
+                    // Ambil ID dari "amplop" navigasi
+                    val txId = backStackEntry.arguments?.getString("txId")?.toIntOrNull()
+
+                    if (txId != null) {
+                        // Panggil Layar Edit yang udah kita buat
+                        // Pastikan import EditTransactionScreen ya!
+                        EditTransactionScreen(
+                            viewModel = viewModel,
+                            transactionId = txId,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
                 }
             }
 
@@ -592,8 +597,7 @@ fun FluxBottomNavigation(selectedIndex: Int, onItemSelected: (Int) -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth() // Buat centering di layar
-            .padding(bottom = 30.dp)
-            .shadow(elevation = 8.dp), // Jarak dari bawah layar biar 'ngambang'
+            .padding(bottom = 30.dp),
         contentAlignment = Alignment.Center
     ) {
         // The Navbar Pill
