@@ -149,51 +149,59 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         val todayYear = calendar.get(Calendar.YEAR)
 
         // 2. Variable Penampung
-        var totalIncome = 0.0
+        var totalIncomeForCurrent = 0.0 // Income khusus buat Current Balance
         var totalExpense = 0.0
         var extraBalance = 0.0
-        // (Opsional: Logic kurangi 320k tiap senin bisa ditaruh di backend/worker,
-        // disini kita fokus ke kalkulasi transaksi berjalan dulu)
 
-        // Grouping transaksi per hari (Key: "DayOfYear-Year")
+        // Grouping transaksi per hari
         val txByDay = transactions.groupBy {
             val c = Calendar.getInstance().apply { timeInMillis = it.date }
             "${c.get(Calendar.DAY_OF_YEAR)}-${c.get(Calendar.YEAR)}"
         }
 
-        // 3. Loop Kalkulasi Extra Balance (Income - Overbudget)
-        // Kita iterasi per hari yang ada transaksinya
+        // 3. Loop Kalkulasi
         txByDay.forEach { (_, txList) ->
-            // Ambil tanggal dari salah satu transaksi di grup ini buat cek hari apa
             val txDate = Calendar.getInstance().apply { timeInMillis = txList.first().date }
             val dayOfWeek = txDate.get(Calendar.DAY_OF_WEEK)
-
-            // Logic Limit: Sabtu(7) & Minggu(1) = 60k, Lainnya = 40k
             val dailyLimit = if (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY) 60000.0 else 40000.0
 
-            val daysIncome = txList.filter { it.isIncome }.sumOf { it.amount }
+            // --- PERUBAHAN DISINI (PEMISAHAN LOGIC) ---
+
+            // A. Income untuk Current Balance (Semua Income KECUALI Injection_Extra)
+            // Jadi kalo kita suntik Extra, Current Balance ga bakal naik.
+            val incomeForCurrent = txList.filter {
+                it.isIncome && it.category != "Injection_Extra"
+            }.sumOf { it.amount }
+
+            // B. Income untuk Extra Balance (Semua Income KECUALI Injection_Current)
+            // Jadi kalo kita suntik Current, Extra Balance ga bakal naik.
+            val incomeForExtra = txList.filter {
+                it.isIncome && it.category != "Injection_Current"
+            }.sumOf { it.amount }
+
+            // Expense Harian
             val daysExpense = txList.filter { !it.isIncome }.sumOf { it.amount }
 
-            totalIncome += daysIncome
+            // Update Total Global (Buat Current Balance nanti)
+            totalIncomeForCurrent += incomeForCurrent
             totalExpense += daysExpense
 
-            // Logic: Income masuk ke Extra Balance
-            extraBalance += daysIncome
+            // Logic Extra Balance: Pakai incomeForExtra
+            extraBalance += incomeForExtra
 
-            // Logic: Cek Sisa Budget Harian
+            // Logic Sisa Budget Harian (Tetap pakai limit - expense)
             val dailyLeft = dailyLimit - daysExpense
 
-            // Logic: Kalo minus (tembus budget), potong Extra Balance
+            // Kalo minus, potong Extra Balance
             if (dailyLeft < 0) {
-                extraBalance += dailyLeft // dailyLeft negatif, jadi otomatis ngurangin
+                extraBalance += dailyLeft
             }
         }
 
-        // 4. Hitung Data Hari Ini (Untuk Card Pojok Kiri Atas)
+        // 4. Hitung Data Hari Ini
         val dayOfWeekToday = calendar.get(Calendar.DAY_OF_WEEK)
         val limitToday = if (dayOfWeekToday == Calendar.SATURDAY || dayOfWeekToday == Calendar.SUNDAY) 60000.0 else 40000.0
 
-        // Ambil transaksi hari ini doang
         val todayTx = transactions.filter {
             val c = Calendar.getInstance().apply { timeInMillis = it.date }
             c.get(Calendar.DAY_OF_YEAR) == todayDay && c.get(Calendar.YEAR) == todayYear
@@ -201,28 +209,19 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         val expenseToday = todayTx.filter { !it.isIncome }.sumOf { it.amount }
         val dailyLeftToday = limitToday - expenseToday
 
-        // 5. Hitung Weekly Percent (Untuk Battery Bar)
-        // Asumsi total budget seminggu = 320.000 (40k*5 + 60k*2)
-        // Kita hitung pengeluaran minggu ini saja
-        val expenseThisWeek = 0.0 // (Implementasi filter minggu ini bisa ditambahkan disini)
-        // Buat simpel, kita pake dummy logic persentase hari ini thd limit
+        // 5. Hitung Daily Percent
         val dailyUsagePercent = (expenseToday / limitToday).toFloat().coerceIn(0f, 1f)
 
-
-        // 6. Siapkan Data Graph (7 Hari Terakhir)
+        // 6. Siapkan Data Graph
         val graphData = (0..6).map { i ->
             val c = Calendar.getInstance()
-            c.add(Calendar.DAY_OF_YEAR, -((6 - i))) // Mundur dari H-6 sampai Hari H
-
+            c.add(Calendar.DAY_OF_YEAR, -((6 - i)))
             val dKey = "${c.get(Calendar.DAY_OF_YEAR)}-${c.get(Calendar.YEAR)}"
             val dOfWeek = c.get(Calendar.DAY_OF_WEEK)
             val dLimit = if (dOfWeek == Calendar.SATURDAY || dOfWeek == Calendar.SUNDAY) 60000f else 40000f
 
-            // Cari total expense di hari tersebut
             val tList = txByDay[dKey] ?: emptyList()
             val dExpense = tList.filter { !it.isIncome }.sumOf { it.amount }.toFloat()
-
-            // Format Label Hari (Mon, Tue)
             val dayLabel = SimpleDateFormat("EEE", Locale.getDefault()).format(c.time)
 
             DayData(dayLabel, dExpense, dLimit)
@@ -231,11 +230,47 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         return AnalyticsState(
             dailyLeft = formatRupiah(dailyLeftToday),
             dailyUsagePercent = dailyUsagePercent,
-            currentBalance = formatRupiah(totalIncome - totalExpense),
-            extraBalance = formatRupiah(extraBalance), // Udah bersih (tanpa +)
+            // Current Balance pake totalIncomeForCurrent
+            currentBalance = formatRupiah(totalIncomeForCurrent - totalExpense),
+            extraBalance = formatRupiah(extraBalance),
             isExtraPositive = extraBalance >= 0,
             graphData = graphData
         )
+    }
+
+    // 1. Toggle Listener
+    fun toggleListener() {
+        _uiState.update {
+            it.copy(isListenerActive = !it.isListenerActive)
+        }
+    }
+
+    // 1. Inject Current (Extra Balance DIAM)
+    fun injectCurrentBalance(amount: Double) {
+        viewModelScope.launch {
+            val injection = TransactionEntity(
+                amount = amount,
+                note = "Manual Injection (Current)",
+                category = "Injection_Current", // <--- KUNCI: Kategori Khusus
+                isIncome = true,
+                date = System.currentTimeMillis()
+            )
+            repository.insert(injection)
+        }
+    }
+
+    // 2. Inject Extra (Current Balance DIAM)
+    fun injectExtraBalance(amount: Double) {
+        viewModelScope.launch {
+            val injection = TransactionEntity(
+                amount = amount,
+                note = "Manual Injection (Extra)",
+                category = "Injection_Extra", // <--- KUNCI: Kategori Khusus
+                isIncome = true,
+                date = System.currentTimeMillis()
+            )
+            repository.insert(injection)
+        }
     }
 }
 

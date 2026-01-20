@@ -144,7 +144,9 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
                         }
                     )
                 }
-                composable(FluxRoutes.WALLET) { PlaceholderScreen("Wallet") }
+                composable(FluxRoutes.WALLET) {
+                    SettingsScreen(viewModel = viewModel)
+                }
 
                 // RUTE BARU: ADD TRANSACTION
                 composable(FluxRoutes.ADD_TRANSACTION) {
