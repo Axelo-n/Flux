@@ -39,7 +39,7 @@ class FluxNotificationListenerService : NotificationListenerService() {
         val packageName = sbn.packageName
 
         // Filter ID Paket (Blu & Debug App Kita Sendiri)
-        if (packageName != "id.co.blu" && packageName != "com.example.flux") return
+//        if (packageName != "id.co.blu" && packageName != "com.example.flux") return
 
         val extras = sbn.notification.extras
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
@@ -50,9 +50,30 @@ class FluxNotificationListenerService : NotificationListenerService() {
         // Jangan diproses lagi biar ga looping.
         if (title.contains("Flux Recorded This")) return
 
-        Log.d("FluxListener", "Notif Detected: $title | $text")
+        // --- MODE DEBUG: CATAT SEMUANYA ---
+        // Kita ga pake Parser. Kita langsung bungkus mentah-mentah.
 
-        // 2. PARSING
+        serviceScope.launch {
+            val debugNote = "[$packageName] $title: $text"
+
+            // Potong kalo kepanjangan biar ga error database
+            val safeNote = if (debugNote.length > 100) debugNote.take(100) + "..." else debugNote
+
+            val newTx = TransactionEntity(
+                amount = 0.0, // Nol Rupiah biar ga ngerusak grafik
+                note = safeNote, // Isinya teks notifikasi asli
+                category = "DEBUG_LOG", // Kategori khusus
+                isIncome = false,
+                date = System.currentTimeMillis()
+            )
+            repository.insert(newTx)
+
+            Log.d("FluxListener", "DEBUG SAVED: $safeNote")
+        }
+
+        Log.d("FluxListener", "Processing: $title | $text")
+
+        // 3. PARSING (Pake Logika Asli Blu)
         val transaction = NotificationTransactionParser.parse(title, text)
 
         if (transaction != null) {
@@ -66,10 +87,31 @@ class FluxNotificationListenerService : NotificationListenerService() {
                 )
                 repository.insert(newTx)
 
-                // 3. SUKSES SIMPAN -> KIRIM NOTIFIKASI BALIK
+                // Kirim notif sukses (Ini yang nanti bakal diblokir sama Filter No. 1)
                 sendSuccessNotification(transaction)
             }
         }
+
+//        Log.d("FluxListener", "Notif Detected: $title | $text")
+//
+//        // 2. PARSING
+//        val transaction = NotificationTransactionParser.parse(title, text)
+//
+//        if (transaction != null) {
+//            serviceScope.launch {
+//                val newTx = TransactionEntity(
+//                    amount = transaction.amount,
+//                    note = transaction.note,
+//                    category = transaction.category,
+//                    isIncome = transaction.isIncome,
+//                    date = System.currentTimeMillis()
+//                )
+//                repository.insert(newTx)
+//
+//                // 3. SUKSES SIMPAN -> KIRIM NOTIFIKASI BALIK
+//                sendSuccessNotification(transaction)
+//            }
+//        }
     }
 
     // --- FUNGSI BARU BUAT NGASIH TAU USER ---

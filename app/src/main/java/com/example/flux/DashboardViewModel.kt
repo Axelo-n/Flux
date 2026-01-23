@@ -157,6 +157,9 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             // Fallback buat kategori Injector atau yang aneh-aneh
             "Injection_Current" -> Pair(R.drawable.ic_wallet_outline, UITeal)
             "Injection_Extra" -> Pair(R.drawable.ic_wallet_outline, UIBlue)
+
+            "DEBUG_LOG" -> Pair(R.drawable.ic_other_outline, Color.Red) // Warna Merah biar keliatan beda
+
             else -> Pair(R.drawable.ic_other_outline, CatGrey)
         }
     }
