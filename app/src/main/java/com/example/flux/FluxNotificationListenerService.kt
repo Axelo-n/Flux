@@ -50,28 +50,11 @@ class FluxNotificationListenerService : NotificationListenerService() {
         // Jangan diproses lagi biar ga looping.
         if (title.contains("Flux Recorded This")) return
 
-        // --- MODE DEBUG: CATAT SEMUANYA ---
-        // Kita ga pake Parser. Kita langsung bungkus mentah-mentah.
+        // --- FILTER ---
+        val allowedApps = listOf("com.bcadigital.blu", "com.example.flux")
+        if (packageName !in allowedApps) return
 
-        serviceScope.launch {
-            val debugNote = "[$packageName] $title: $text"
-
-            // Potong kalo kepanjangan biar ga error database
-            val safeNote = if (debugNote.length > 100) debugNote.take(100) + "..." else debugNote
-
-            val newTx = TransactionEntity(
-                amount = 0.0, // Nol Rupiah biar ga ngerusak grafik
-                note = safeNote, // Isinya teks notifikasi asli
-                category = "DEBUG_LOG", // Kategori khusus
-                isIncome = false,
-                date = System.currentTimeMillis()
-            )
-            repository.insert(newTx)
-
-            Log.d("FluxListener", "DEBUG SAVED: $safeNote")
-        }
-
-        Log.d("FluxListener", "Processing: $title | $text")
+//        Log.d("FluxListener", "Processing: $title | $text")
 
         // 3. PARSING (Pake Logika Asli Blu)
         val transaction = NotificationTransactionParser.parse(title, text)
@@ -91,27 +74,6 @@ class FluxNotificationListenerService : NotificationListenerService() {
                 sendSuccessNotification(transaction)
             }
         }
-
-//        Log.d("FluxListener", "Notif Detected: $title | $text")
-//
-//        // 2. PARSING
-//        val transaction = NotificationTransactionParser.parse(title, text)
-//
-//        if (transaction != null) {
-//            serviceScope.launch {
-//                val newTx = TransactionEntity(
-//                    amount = transaction.amount,
-//                    note = transaction.note,
-//                    category = transaction.category,
-//                    isIncome = transaction.isIncome,
-//                    date = System.currentTimeMillis()
-//                )
-//                repository.insert(newTx)
-//
-//                // 3. SUKSES SIMPAN -> KIRIM NOTIFIKASI BALIK
-//                sendSuccessNotification(transaction)
-//            }
-//        }
     }
 
     // --- FUNGSI BARU BUAT NGASIH TAU USER ---
