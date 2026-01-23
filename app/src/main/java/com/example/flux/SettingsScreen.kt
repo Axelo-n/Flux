@@ -41,12 +41,10 @@ import androidx.lifecycle.LifecycleEventObserver
 
 @Composable
 fun SettingsScreen(viewModel: DashboardViewModel) {
-    val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val scrollState = rememberScrollState()
 
-    // State untuk input nominal suntikan dana
     var injectionAmount by remember { mutableStateOf("") }
 
     fun checkNotificationServiceAccess(): Boolean {
@@ -54,10 +52,8 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
         return flat != null && flat.contains(context.packageName)
     }
 
-    // State buat nyimpen status izin (True = Active, False = Inactive)
     var isServiceActive by remember { mutableStateOf(checkNotificationServiceAccess()) }
 
-    // Auto-refresh status pas kita balik dari Setting HP
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -68,13 +64,11 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Cek apakah user SUDAH kasih izin baca notifikasi?
     fun isNotificationListenerEnabled(context: Context): Boolean {
         val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
         return flat != null && flat.contains(context.packageName)
     }
 
-    // State real-time buat UI switch
     var isAccessGranted by remember { mutableStateOf(isNotificationListenerEnabled(context)) }
 
     // Launcher Izin Notifikasi
@@ -91,7 +85,7 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState) // Biar bisa discroll
+            .verticalScroll(scrollState)
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
@@ -111,7 +105,7 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
         SectionLabel("GENERAL")
 
         // Voice Listener Card
-        // --- 1. LISTENER TOGGLE (UPDATED) ---
+        // --- 1. LISTENER TOGGLE ---
         FluxCard(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -121,7 +115,7 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Icon Status (Hijau kalau Active, Abu kalau Mati)
+                    // Icon Status
                     Box(
                         modifier = Modifier
                             .size(44.dp)
@@ -129,7 +123,6 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                             .background(if (isServiceActive) UITeal.copy(alpha = 0.2f) else UIGray.copy(alpha = 0.1f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Ganti icon mic jadi icon yang relevan (misal radar/sync)
                         Icon(
                             painter = painterResource(R.drawable.flux_transparent),
                             contentDescription = null,
@@ -155,7 +148,6 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                 Switch(
                     checked = isServiceActive,
                     onCheckedChange = {
-                        // Kita ga bisa maksa nyalain, user harus ke Setting HP
                         val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
                         context.startActivity(intent)
                     },
@@ -207,7 +199,7 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                 }
                 // Arrow icon indicator
                 Icon(
-                    painter = painterResource(id = android.R.drawable.ic_media_play), // Pake icon play bawaan android sementara
+                    painter = painterResource(id = android.R.drawable.ic_media_play),
                     contentDescription = null,
                     tint = UIGray,
                     modifier = Modifier.size(12.dp)
@@ -221,14 +213,11 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
         FluxCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-//                    Icon(Icons.Outlined.BugReport, contentDescription = null, tint = UIRed, modifier = Modifier.size(20.dp))
-//                    Spacer(modifier = Modifier.width(8.dp))
                     Text("Manual Balance Injection", style = AppFont.Bold.copy(color = UIWhite, fontSize = 16.sp))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Input Field yang lebih cantik
                 OutlinedTextField(
                     value = injectionAmount,
                     onValueChange = { input ->
@@ -273,7 +262,6 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-//                            Icon(painter = painterResource(R.drawable.ic_wallet_outline), contentDescription = null, modifier = Modifier.size(18.dp))
                             Text("Current", style = AppFont.Bold.copy(fontSize = 18.sp))
                         }
                     }
@@ -296,15 +284,12 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-//                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                             Text("Extra", style = AppFont.Bold.copy(fontSize = 18.sp))
                         }
                     }
                 }
             }
         }
-
-        // Spacer bawah biar ga kepotong navbar
         Spacer(modifier = Modifier.height(100.dp))
     }
 }
@@ -319,7 +304,7 @@ fun SectionLabel(text: String) {
     )
 }
 
-// Fungsi Helper Notifikasi (Tetap sama)
+// Fungsi Helper Notifikasi
 @SuppressLint("MissingPermission")
 fun showDummyNotification(context: Context) {
     val channelId = "flux_channel"
@@ -334,7 +319,7 @@ fun showDummyNotification(context: Context) {
     val accentColor = "#0B0E14".toColorInt()
 
     val notification = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.drawable.flux_transparent) // Pastikan icon ada
+        .setSmallIcon(R.drawable.flux_transparent)
         .setColor(accentColor)
         .setContentTitle("Flux Budget Alert")
         .setContentText("You've used 80% of your daily budget!")

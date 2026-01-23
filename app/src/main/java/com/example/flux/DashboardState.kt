@@ -2,7 +2,7 @@ package com.example.flux
 
 import androidx.compose.ui.graphics.Color
 
-// 1. Model Data Transaksi (Dipindah kesini biar rapi)
+// 1. Model Data Transaksi
 data class Transaction(
     val id: Int,
     val title: String,
@@ -10,7 +10,6 @@ data class Transaction(
     val amount: Double,
     val formattedAmount: String,
 
-    // GANTI JADI INT (Karena R.drawable itu isinya Angka)
     val iconRes: Int,
 
     val iconBgColor: Color,
@@ -25,7 +24,7 @@ data class DayData(
     val limit: Float
 )
 
-// 3. State Utama (Kumpulan semua data yang tampil di layar)
+// 3. State Utama
 data class DashboardState(
     val isLoading: Boolean = true,
     val recentTransactions: List<Transaction> = emptyList(),
@@ -34,7 +33,6 @@ data class DashboardState(
     val isExtraBalancePositive: Boolean = true,
     val dailyBudgetLeft: String = "Rp 0",
 
-    // Pastikan dua ini ada:
     val dailyUsagePercent: Float = 0f,
     val graphData: List<DayData> = emptyList()
 )

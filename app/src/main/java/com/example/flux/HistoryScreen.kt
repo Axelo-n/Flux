@@ -1,14 +1,30 @@
 package com.example.flux
 
-import android.R.attr.onClick
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -19,29 +35,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.flux.ui.theme.*
+import com.example.flux.ui.theme.AppFont
+import com.example.flux.ui.theme.UIBackground
+import com.example.flux.ui.theme.UIGray
+import com.example.flux.ui.theme.UIGreen
+import com.example.flux.ui.theme.UIRed
+import com.example.flux.ui.theme.UISurface
+import com.example.flux.ui.theme.UITeal
+import com.example.flux.ui.theme.UIWhite
+import com.example.flux.ui.theme.gradientBrush
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-
-// --- DATA MODEL UI DUMMY (Disesuaikan pake Int/Drawable) ---
-data class DummyTransaction(
-    val title: String,
-    val category: String,
-    val amount: String,
-    val isIncome: Boolean,
-    val iconRes: Int, // Pake Int (R.drawable)
-    val iconBg: Color
-)
 
 @Composable
 fun HistoryScreen(
@@ -64,12 +76,12 @@ fun HistoryScreen(
     val months = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
     val years = (2024..2030).toList() // Bisa disesuaikan range tahunnya
 
-    // 2. FILTERING DATA (Core Logic)
-    // Kita filter data 'allTransactions' berdasarkan state bulan & tahun di atas
+    // 2. FILTERING DATA
+    // filter data 'allTransactions' berdasarkan state bulan & tahun di atas
     val filteredTransactions = remember(allTransactions, selectedMonthIndex, selectedYear) {
         allTransactions.filter { tx ->
             val txCalendar = Calendar.getInstance()
-            txCalendar.timeInMillis = tx.date // Asumsi tx.date adalah Long (timestamp)
+            txCalendar.timeInMillis = tx.date
 
             val txMonth = txCalendar.get(Calendar.MONTH)
             val txYear = txCalendar.get(Calendar.YEAR)
@@ -78,16 +90,16 @@ fun HistoryScreen(
         }
     }
 
-    // 3. GROUPING DATA (Berdasarkan Tanggal)
+    // 3. GROUPING DATA
     val groupedTransactions = remember(filteredTransactions) {
         filteredTransactions
-            .sortedByDescending { it.date } // Urutkan dari yang terbaru
+            .sortedByDescending { it.date }
             .groupBy {
                 SimpleDateFormat("dd", Locale.getDefault()).format(Date(it.date))
             }
     }
 
-    // 4. HITUNG TOTAL SALDO (Hanya dari data yang sudah difilter)
+    // 4. HITUNG TOTAL SALDO
     val totalBalance = remember(filteredTransactions) {
         filteredTransactions.sumOf { if (it.isIncome) it.amount else -it.amount }
     }
@@ -118,7 +130,7 @@ fun HistoryScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_close), // Pastikan ada di drawable
+                        painter = painterResource(R.drawable.ic_close),
                         contentDescription = "Close",
                         tint = UIWhite
                     )
@@ -163,7 +175,6 @@ fun HistoryScreen(
                 .background(UISurface)
         ) {
             if (filteredTransactions.isEmpty()) {
-                // Tampilan kalau data kosong di bulan tsb
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No transactions in this period", style = AppFont.Regular.copy(color = UIGray))
                 }
@@ -208,7 +219,7 @@ fun DropdownFilter(
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
                 .background(brush = gradientBrush)
-                .clickable { expanded = true } // Buka menu pas diklik
+                .clickable { expanded = true }
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -218,7 +229,7 @@ fun DropdownFilter(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Icon(
-                painter = painterResource(R.drawable.ic_dropdown), // Pastikan ada icon dropdown/arrow down
+                painter = painterResource(R.drawable.ic_dropdown),
                 contentDescription = null,
                 tint = UIBackground,
                 modifier = Modifier.size(10.dp)
@@ -229,7 +240,7 @@ fun DropdownFilter(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(UISurface).heightIn(max = 200.dp) // Max height biar bisa scroll
+            modifier = Modifier.background(UISurface).heightIn(max = 200.dp)
         ) {
             items.forEachIndexed { index, item ->
                 DropdownMenuItem(
@@ -247,29 +258,6 @@ fun DropdownFilter(
 }
 
 // --- UI COMPONENTS ---
-
-@Composable
-fun FilterPillUI(text: String) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(brush = gradientBrush)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = text,
-            style = AppFont.Bold.copy(fontSize = 14.sp, color = UIBackground)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Icon(
-            painter = painterResource(R.drawable.ic_dropdown),
-            contentDescription = null,
-            tint = UIBackground,
-            modifier = Modifier.size(8.dp)
-        )
-    }
-}
 
 @Composable
 fun DateHeaderUI(date: String) {
@@ -301,7 +289,6 @@ fun TransactionItemUI(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                // UPDATE: Pake painterResource karena sekarang datanya Int (Drawable)
                 painter = painterResource(id = data.iconRes),
                 contentDescription = null,
                 tint = UIWhite,
@@ -331,7 +318,7 @@ fun TransactionItemUI(
 
         // Amount
         Text(
-            text = data.formattedAmount, // GANTI: Pake formattedAmount dari ViewModel
+            text = data.formattedAmount,
             style = AppFont.Bold.copy(
                 fontSize = 18.sp,
                 color = if (data.isIncome) UIGreen else UIRed
@@ -339,14 +326,3 @@ fun TransactionItemUI(
         )
     }
 }
-
-// --- DATA DUMMY GENERATOR ---
-
-//
-//@Preview(showBackground = true)
-//@Composable
-//fun HistoryScreenPreview() {
-//    FluxTheme {
-//        HistoryScreen()
-//    }
-//}

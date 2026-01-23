@@ -24,8 +24,7 @@ object NotificationTransactionParser {
         // 3. TEBAK KATEGORI
         val category = detectCategory(fullText, isIncome)
 
-        // 4. BERSIHIN NOTE
-        // Kita ambil teks notifnya, tapi kalau kepanjangan dipotong
+        // 4. BERSIHKAN NOTE
         val note = if (text.length > 40) text.take(40) + "..." else text
 
         return ParsedTransaction(
@@ -44,10 +43,9 @@ object NotificationTransactionParser {
     }
 
     private fun extractAmount(text: String): Double {
-        // Hapus titik ribuan (Format indo: 50.000 -> 50000)
+        // Hapus titik ribuan
         var cleanText = text.replace(".", "").replace(",", "")
 
-        // Handle user nyebut "juta" atau "rb" (Jaga-jaga aja)
         var multiplier = 1.0
         if (cleanText.contains("juta")) {
             multiplier = 1000000.0
@@ -64,10 +62,9 @@ object NotificationTransactionParser {
     }
 
     private fun detectCategory(text: String, isIncome: Boolean): String {
-        if (isIncome) return "Salary" // Atau "Income"
+        if (isIncome) return "Salary"
 
-        // LOGIC KATEGORI UNTUK PENGELUARAN BANK
-        // Karena bank ga tau kita beli makan atau bensin, kita tebak dari keyword merchant
+        // LOGIC KATEGORI
         return when {
             // Makanan
             text.contains("kopi") || text.contains("cafe") || text.contains("resto") ||
@@ -89,7 +86,7 @@ object NotificationTransactionParser {
             text.contains("transfer") || text.contains("top up") || text.contains("gopay") ||
                     text.contains("ovo") || text.contains("dana") -> "Account Transfer"
 
-            else -> "Other" // Paling sering masuk sini kalau cuma "Transfer ke BCA xxx"
+            else -> "Other"
         }
     }
 }

@@ -40,14 +40,12 @@ fun EditTransactionScreen(
     // 1. Cari Data Lama
     val transaction = viewModel.getTransactionById(transactionId)
 
-    // Safety check: Kalau ID ga ketemu, balik.
     if (transaction == null) {
         LaunchedEffect(Unit) { onBack() }
         return
     }
 
-    // 2. State Form (Diisi Value Lama)
-    // .toInt() biar ga muncul .0 di belakang angka (misal 50000.0 jadi 50000)
+    // 2. State Form
     var amount by remember { mutableStateOf(transaction.amount.toInt().toString()) }
     var note by remember { mutableStateOf(transaction.title) }
     var selectedCategory by remember { mutableStateOf(transaction.category) }
@@ -56,7 +54,7 @@ fun EditTransactionScreen(
     // State Dialog Delete
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // List Kategori (Sama kayak AddScreen)
+    // List Kategori
     val categories = listOf(
         Triple("Food and Beverages", R.drawable.ic_food_outline, CatOrange),
         Triple("Transportation", R.drawable.ic_car_outline, CatGreen),
@@ -261,7 +259,7 @@ fun EditTransactionScreen(
 
                     // UPDATE TRANSACTION
                     viewModel.updateTransaction(
-                        id = transactionId, // ID Penting buat update
+                        id = transactionId,
                         amount = amountDouble,
                         note = note,
                         category = selectedCategory,

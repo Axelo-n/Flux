@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.sp
 import com.example.flux.ui.theme.*
 
-// Ini cuma buat tes navigasi
 @Composable
 fun PlaceholderScreen(title: String) {
     Box(
@@ -23,11 +22,10 @@ fun PlaceholderScreen(title: String) {
     }
 }
 
-// Daftar nama rute biar ga typo
 object FluxRoutes {
     const val HOME = "home"
     const val ANALYTICS = "analytics"
     const val HISTORY = "history"
     const val WALLET = "wallet"
-    const val ADD_TRANSACTION = "add_transaction" // <--- TAMBAH INI
+    const val ADD_TRANSACTION = "add_transaction"
 }

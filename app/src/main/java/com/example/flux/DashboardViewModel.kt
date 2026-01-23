@@ -17,15 +17,12 @@ import java.util.Locale
 
 class DashboardViewModel(private val repository: TransactionRepository) : ViewModel() {
 
-    // --- 1. STATE UTAMA (OTOMATIS / REAL-TIME) ---
-    // Ini adalah "Jantung" dari ViewModel.
-    // Dia menggabungkan data dari Database (Transactions, Income, Expense)
-    // Lalu otomatis menghitung Analytics dan menghasilkan UI State baru.
+    // --- 1. STATE UTAMA ---
     val uiState: StateFlow<DashboardState> = combine(
         repository.allTransactions,
         repository.totalIncome,
         repository.totalExpense
-    ) { transactions, _, _ -> // Kita ignore income/expense raw dari repo, kita hitung manual di analytics biar akurat
+    ) { transactions, _, _ ->
 
         // A. Convert Entity Database ke Model UI
         val uiTransactions = transactions.map { entity ->
@@ -59,8 +56,8 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000), // Tahan data 5 detik saat minimize
-        initialValue = DashboardState() // State awal kosong
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = DashboardState()
     )
 
     // --- 2. FUNGSI DATABASE (CRUD) ---
@@ -86,9 +83,9 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
                 note = note,
                 category = category,
                 isIncome = isIncome,
-                date = date // Pertahankan tanggal asli
+                date = date
             )
-            repository.insert(updateTx) // Room otomatis replace jika ID sama
+            repository.insert(updateTx)
         }
     }
 
@@ -105,7 +102,7 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             val injection = TransactionEntity(
                 amount = amount,
                 note = "Manual Injection (Current)",
-                category = "Injection_Current", // Kategori Khusus
+                category = "Injection_Current",
                 isIncome = true,
                 date = System.currentTimeMillis()
             )
@@ -118,7 +115,7 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             val injection = TransactionEntity(
                 amount = amount,
                 note = "Manual Injection (Extra)",
-                category = "Injection_Extra", // Kategori Khusus
+                category = "Injection_Extra",
                 isIncome = true,
                 date = System.currentTimeMillis()
             )
@@ -129,7 +126,6 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
     // --- 4. HELPER & LOGIC ---
 
     fun getTransactionById(id: Int): Transaction? {
-        // Ambil dari state terakhir yang tersimpan
         return uiState.value.recentTransactions.find { it.id == id }
     }
 
@@ -139,13 +135,11 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         return format.format(amount).replace("Rp", "Rp ")
     }
 
-    // Logic Icon & Warna (DISAMAKAN DENGAN ADD TRANSACTION SCREEN)
     private fun getCategoryStyle(category: String, isIncome: Boolean): Pair<Int, Color> {
         if (isIncome) {
             return Pair(R.drawable.ic_wallet_outline, CatBlue)
         }
 
-        // Pastikan String ini SAMA PERSIS dengan yang ada di AddTransactionScreen.kt
         return when (category) {
             "Food and Beverages" -> Pair(R.drawable.ic_food_outline, CatOrange)
             "Transportation" -> Pair(R.drawable.ic_car_outline, CatGreen)
@@ -154,11 +148,10 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             "Account Transfer" -> Pair(R.drawable.ic_card_outline, CatBlue)
             "Other" -> Pair(R.drawable.ic_other_outline, CatGrey)
 
-            // Fallback buat kategori Injector atau yang aneh-aneh
             "Injection_Current" -> Pair(R.drawable.ic_wallet_outline, UITeal)
             "Injection_Extra" -> Pair(R.drawable.ic_wallet_outline, UIBlue)
 
-            "DEBUG_LOG" -> Pair(R.drawable.ic_other_outline, Color.Red) // Warna Merah biar keliatan beda
+            "DEBUG_LOG" -> Pair(R.drawable.ic_other_outline, Color.Red)
 
             else -> Pair(R.drawable.ic_other_outline, CatGrey)
         }
@@ -185,11 +178,11 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             val dayOfWeek = txDate.get(Calendar.DAY_OF_WEEK)
             val dailyLimit = if (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY) 60000.0 else 40000.0
 
-            // Filter Income biar ga saling ganggu
+            // Filter Income
             val incomeForCurrent = txList.filter { it.isIncome && it.category != "Injection_Extra" }.sumOf { it.amount }
             val incomeForExtra = txList.filter { it.isIncome && it.category != "Injection_Current" }.sumOf { it.amount }
 
-            // Filter Expense (Exclude Injection Categories just in case)
+            // Filter Expense
             val daysExpense = txList.filter { !it.isIncome }.sumOf { it.amount }
 
             totalIncomeForCurrent += incomeForCurrent
@@ -198,7 +191,7 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
 
             val dailyLeft = dailyLimit - daysExpense
             if (dailyLeft < 0) {
-                extraBalance += dailyLeft // Kurangi extra balance kalau overbudget
+                extraBalance += dailyLeft
             }
         }
 
@@ -239,7 +232,7 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
     }
 }
 
-// Class Pembantu buat Data Analytics
+// Class Pembantu Data Analytics
 data class AnalyticsState(
     val dailyLeft: String,
     val dailyUsagePercent: Float,

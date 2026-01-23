@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TransactionDao {
-    // 1. Simpan Transaksi (Otomatis background process pake suspend)
+    // 1. Simpan Transaksi
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: TransactionEntity)
 
@@ -18,7 +18,6 @@ interface TransactionDao {
     suspend fun deleteTransaction(transaction: TransactionEntity)
 
     // 3. Ambil Semua Data (Diurutkan dari yang terbaru)
-    // Pake 'Flow' biar UI otomatis update real-time kalau ada data baru!
     @Query("SELECT * FROM transactions ORDER BY date DESC")
     fun getAllTransactions(): Flow<List<TransactionEntity>>
 

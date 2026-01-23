@@ -35,28 +35,21 @@ class FluxNotificationListenerService : NotificationListenerService() {
 
         if (sbn == null) return
 
-        // 1. FILTER CUMA BLU BY BCA
+        // 1. INITIALIZE FILTER
         val packageName = sbn.packageName
-
-        // Filter ID Paket (Blu & Debug App Kita Sendiri)
-//        if (packageName != "id.co.blu" && packageName != "com.example.flux") return
 
         val extras = sbn.notification.extras
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getString(Notification.EXTRA_TEXT) ?: ""
 
-        // --- 🛡️ ANTI-LOOP PROTECTION 🛡️ ---
-        // Kalau notifnya adalah notif konfirmasi dari kita sendiri, STOP DISINI.
-        // Jangan diproses lagi biar ga looping.
+        // Prevent loop dari debug
         if (title.contains("Flux Recorded This")) return
 
-        // --- FILTER ---
+        // --- FILTERING ---
         val allowedApps = listOf("com.bcadigital.blu", "com.example.flux")
         if (packageName !in allowedApps) return
 
-//        Log.d("FluxListener", "Processing: $title | $text")
-
-        // 3. PARSING (Pake Logika Asli Blu)
+        // 3. PARSING
         val transaction = NotificationTransactionParser.parse(title, text)
 
         if (transaction != null) {
@@ -70,18 +63,15 @@ class FluxNotificationListenerService : NotificationListenerService() {
                 )
                 repository.insert(newTx)
 
-                // Kirim notif sukses (Ini yang nanti bakal diblokir sama Filter No. 1)
                 sendSuccessNotification(transaction)
             }
         }
     }
 
-    // --- FUNGSI BARU BUAT NGASIH TAU USER ---
     private fun sendSuccessNotification(tx: ParsedTransaction) {
         val channelId = "flux_success_channel"
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Bikin Channel (Wajib buat Android 8+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
@@ -91,31 +81,26 @@ class FluxNotificationListenerService : NotificationListenerService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        // Format Rupiah buat di notif
         val format = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
         format.maximumFractionDigits = 0
         val amountString = format.format(tx.amount).replace("Rp", "Rp ")
 
-        // Action: Kalau notif diklik, buka aplikasi Flux
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        // Teks Notifikasinya
-        // Contoh: "Recorded: Rp 50.000 (Food)"
         val contentText = "$amountString (${tx.category})"
 
         val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.flux_transparent) // Pake icon putih yang tadi
-            .setColor("#0B0E14".toColorInt()) // Warna Teal Flux
-            .setContentTitle("Flux Recorded This! ✅") // Judul Notif
-            .setContentText(contentText) // Isi Notif
-            .setContentIntent(pendingIntent) // Biar bisa diklik
-            .setAutoCancel(true) // Ilang pas diklik
+            .setSmallIcon(R.drawable.flux_transparent)
+            .setColor("#0B0E14".toColorInt())
+            .setContentTitle("Flux Recorded This! ✅")
+            .setContentText(contentText)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
             .build()
 
-        // Tampilkan (ID pake currentTimeMillis biar ga numpuk/ketimpa notif lama)
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }
 

@@ -108,7 +108,7 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
         floatingActionButton = {
             // Animasi Show/Hide FAB
             androidx.compose.animation.AnimatedVisibility(
-                visible = showBottomComponents, // Cuma muncul di Home
+                visible = showBottomComponents,
                 enter = androidx.compose.animation.scaleIn(),
                 exit = androidx.compose.animation.scaleOut()
             ) {
@@ -118,7 +118,7 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
                     contentColor = UIBackground,
                     shape = CircleShape,
                     modifier = Modifier
-                        .padding(bottom = 100.dp) // Naik dikit biar ga ketutupan Navbar
+                        .padding(bottom = 100.dp)
                         .size(56.dp)
                         .shadow(8.dp)
                 ) {
@@ -138,15 +138,13 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
                 startDestination = FluxRoutes.HOME,
                 modifier = Modifier.fillMaxSize()
             ) {
-                // ... Rute Home & Placeholders SAMA SEPERTI SEBELUMNYA ...
                 composable(FluxRoutes.HOME) { HomeScreen(viewModel = viewModel) }
                 composable(FluxRoutes.ANALYTICS) { PlaceholderScreen("Coming Soon") }
                 composable(FluxRoutes.HISTORY) {
                     HistoryScreen(
                         viewModel = viewModel,
-                        navController = navController, // Sekarang wajib dikirim!
+                        navController = navController,
                         onBack = {
-                            // Aksi kalau tombol X ditekan -> Balik ke Home
                             navController.popBackStack()
                         }
                     )
@@ -155,21 +153,18 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
                     SettingsScreen(viewModel = viewModel)
                 }
 
-                // RUTE BARU: ADD TRANSACTION
+                // ADD TRANSACTION
                 composable(FluxRoutes.ADD_TRANSACTION) {
                     AddTransactionScreen(
-                        viewModel = viewModel, // Kirim ViewModel
-                        onBack = { navController.popBackStack() } // Kirim aksi back
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() }
                     )
                 }
 
                 composable("edit_transaction/{txId}") { backStackEntry ->
-                    // Ambil ID dari "amplop" navigasi
                     val txId = backStackEntry.arguments?.getString("txId")?.toIntOrNull()
 
                     if (txId != null) {
-                        // Panggil Layar Edit yang udah kita buat
-                        // Pastikan import EditTransactionScreen ya!
                         EditTransactionScreen(
                             viewModel = viewModel,
                             transactionId = txId,
@@ -179,13 +174,12 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
                 }
             }
 
-            // LAYER 2: NAVBAR (Hanya muncul jika showBottomComponents = true)
+            // LAYER 2: NAVBAR
             if (showBottomComponents) {
                 Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                     FluxBottomNavigation(
                         selectedIndex = selectedNavIndex,
                         onItemSelected = { index ->
-                            // ... LOGIC NAVIGASI SAMA SEPERTI SEBELUMNYA ...
                             val route = when(index) {
                                 0 -> FluxRoutes.HOME
                                 1 -> FluxRoutes.ANALYTICS
@@ -283,7 +277,7 @@ fun BudgetGridSection(dailyLeft: String, dailyUsagePercent: Float) {
             }
         }
 
-        // Card 2: Weekly Usage (Updated: Battery Style)
+        // Card 2: Daily Usage
         FluxCard(modifier = Modifier
             .height(100.dp)
             .weight(0.8f)) {
@@ -305,20 +299,19 @@ fun BudgetGridSection(dailyLeft: String, dailyUsagePercent: Float) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(32.dp) // Ketebalan batre
+                        .height(32.dp)
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
 
-                        // 1. Track (Background Bar - Abu gelap)
+                        // 1. Track (Background Bar)
                         drawRoundRect(
-                            color = UIBlack.copy(alpha = 0.5f), // Lebih gelap dari card
+                            color = UIBlack.copy(alpha = 0.5f),
                             cornerRadius = cornerRadius,
                             size = size
                         )
 
-                        // 2. Progress Fill (Gradient Cyan -> Blue)
-                        // Misal progress 75% -> width * 0.75f
+                        // 2. Progress Fill
                         drawRoundRect(
                             brush = Brush.horizontalGradient(listOf(UITeal, UIBlue)),
                             cornerRadius = cornerRadius,
@@ -350,9 +343,8 @@ fun BalanceRowSection(currentBalance: String, extraBalance: String, isPositive: 
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Text(text = "Extra Balance", style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = (3).dp))
                 Text(
-                    text = extraBalance, // Teks udah bersih tanpa +
+                    text = extraBalance,
                     style = AppFont.Bold.copy(
-                        // Kalau Positive -> Hijau, Kalau Negative -> Merah
                         color = if (isPositive) UIGreen else UIRed,
                         fontSize = 20.sp
                     ),
@@ -365,15 +357,13 @@ fun BalanceRowSection(currentBalance: String, extraBalance: String, isPositive: 
 
 @Composable
 fun SpendingGraphSection(dataPoints: List<DayData>) {
-    // Cari nilai tertinggi dari data untuk batas atas grafik (biar ga kepotong)
-    // Minimal 80k biar grafik ga keliatan kosong kalo expense dikit
     val maxDataValue = dataPoints.maxOfOrNull { it.amount } ?: 80000f
-    val yAxisMax = maxOf(maxDataValue, 80000f) * 1.2f // Tambah buffer 20% diatas
+    val yAxisMax = maxOf(maxDataValue, 80000f) * 1.2f
 
     FluxCard(
         modifier = Modifier
             .fillMaxWidth()
-            .height(220.dp) // Gedein dikit
+            .height(220.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
 
@@ -386,7 +376,7 @@ fun SpendingGraphSection(dataPoints: List<DayData>) {
                         .fillMaxHeight()
                         .padding(bottom = 30.dp)
                 ) {
-                    // Generate 5 label dari 0 sampe Max
+                    // Generate 5 label dari 0 -> Max
                     val step = yAxisMax / 4
                     val labels = listOf(
                         yAxisMax,
@@ -458,7 +448,6 @@ fun SpendingGraphSection(dataPoints: List<DayData>) {
                             // Gambar Titik
                             points.forEachIndexed { index, offset ->
                                 val dayData = dataPoints[index]
-                                // Logic warna titik: Merah kalo expense > limit hari itu
                                 val isOver = dayData.amount > dayData.limit
                                 val pointColor = if (isOver) UIRed else UIGreen
 
@@ -475,7 +464,7 @@ fun SpendingGraphSection(dataPoints: List<DayData>) {
                     ) {
                         dataPoints.forEach {
                             Text(
-                                text = it.day, // Mon, Tue
+                                text = it.day,
                                 style = AppFont.SemiBold.copy(color = UIGray, fontSize = 12.sp),
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.weight(1f)
@@ -490,7 +479,6 @@ fun SpendingGraphSection(dataPoints: List<DayData>) {
 
 @Composable
 fun RecentTransactionsCard(transactions: List<Transaction>) {
-    // Bungkus semua dalam satu Card besar
     FluxCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -506,7 +494,6 @@ fun RecentTransactionsCard(transactions: List<Transaction>) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Loop pakai variable parameter
             transactions.forEachIndexed { index, transaction ->
                 TransactionRowItem(transaction)
                 if (index < transactions.size - 1) {
@@ -528,7 +515,7 @@ fun TransactionRowItem(transaction: Transaction) {
             modifier = Modifier
                 .size(50.dp)
                 .clip(CircleShape)
-                .background(transaction.iconBgColor), // Warna background dinamis (Ungu/Orange)
+                .background(transaction.iconBgColor),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -550,14 +537,14 @@ fun TransactionRowItem(transaction: Transaction) {
                     fontSize = 18.sp
                 ),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis, // Biar text kepanjangan jadi "..."
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.offset(y = (4).dp)
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = transaction.category,
                 style = AppFont.Medium.copy(
-                    color = UIGray, // Warna abu sesuai gambar
+                    color = UIGray,
                     fontSize = 14.sp
                 ),
                 modifier = Modifier.offset(y = (-4).dp)
@@ -568,7 +555,7 @@ fun TransactionRowItem(transaction: Transaction) {
 
         // 3. Amount (Kanan)
         Text(
-            text = transaction.formattedAmount, // GANTI DARI amount KE formattedAmount
+            text = transaction.formattedAmount,
             style = AppFont.Bold.copy(
                 color = if (transaction.isIncome) UIGreen else UIRed,
                 fontSize = 18.sp
@@ -586,25 +573,24 @@ fun FluxBottomNavigation(selectedIndex: Int, onItemSelected: (Int) -> Unit) {
         R.drawable.ic_wallet_outline  // Index 3: Wallet
     )
 
-    // Container buat Navigasi Mengambang
+    // Container untuk Navigasi Mengambang
     Box(
         modifier = Modifier
-            .fillMaxWidth() // Buat centering di layar
+            .fillMaxWidth()
             .padding(bottom = 30.dp),
         contentAlignment = Alignment.Center
     ) {
         // The Navbar Pill
         BoxWithConstraints(
             modifier = Modifier
-                .width(315.dp) // Lebar Fix sesuai request
-                .height(80.dp) // Tinggi Fix sesuai request
-                .clip(RoundedCornerShape(50)) // Pill Shape bulat banget
-                .background(UISurface) // Warna dasar gelap
+                .width(315.dp)
+                .height(80.dp)
+                .clip(RoundedCornerShape(50))
+                .background(UISurface)
         ) {
             val itemWidth = maxWidth / navItems.size
 
-            // 1. Sliding Indicator (Lingkaran Cyan)
-            // Kita hitung posisi X berdasarkan index yang dipilih
+            // 1. Sliding Indicator
             val indicatorOffset by animateDpAsState(
                 targetValue = itemWidth * selectedIndex,
                 animationSpec = spring(
@@ -616,7 +602,7 @@ fun FluxBottomNavigation(selectedIndex: Int, onItemSelected: (Int) -> Unit) {
 
             Box(
                 modifier = Modifier
-                    .offset(x = indicatorOffset) // Ini yang bikin geser
+                    .offset(x = indicatorOffset)
                     .width(itemWidth)
                     .fillMaxHeight(),
                 contentAlignment = Alignment.Center
@@ -624,9 +610,9 @@ fun FluxBottomNavigation(selectedIndex: Int, onItemSelected: (Int) -> Unit) {
                 // Lingkaran Cyan
                 Box(
                     modifier = Modifier
-                        .size(74.dp) // Ukuran lingkaran (pas di height 80dp)
+                        .size(74.dp)
                         .clip(CircleShape)
-                        .background(UITeal) // Warna Cyan Neon
+                        .background(UITeal)
                 )
             }
 
@@ -636,10 +622,6 @@ fun FluxBottomNavigation(selectedIndex: Int, onItemSelected: (Int) -> Unit) {
             ) {
                 navItems.forEachIndexed { index, iconRes ->
                     val isSelected = index == selectedIndex
-
-                    // Warna icon berubah pas dilewatin lingkaran
-                    // Kalau Selected -> Hitam (Biar kontras sama Cyan)
-                    // Kalau Belum -> Putih (Kontras sama background gelap)
                     val iconColor by animateColorAsState(
                         targetValue = if (isSelected) UIBackground else UIWhite,
                         animationSpec = tween(300),
@@ -652,7 +634,7 @@ fun FluxBottomNavigation(selectedIndex: Int, onItemSelected: (Int) -> Unit) {
                             .fillMaxHeight()
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
-                                indication = null // Hapus efek ripple standar biar bersih
+                                indication = null
                             ) { onItemSelected(index) },
                         contentAlignment = Alignment.Center
                     ) {
@@ -660,7 +642,7 @@ fun FluxBottomNavigation(selectedIndex: Int, onItemSelected: (Int) -> Unit) {
                             painter = painterResource(id = iconRes),
                             contentDescription = null,
                             tint = iconColor,
-                            modifier = Modifier.size(18.dp) // Ukuran icon
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -682,51 +664,12 @@ fun FluxCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     }
 }
 
-// --- DUMMY DATA ---
-fun getDummyTransactions(): List<Transaction> {
-    return listOf(
-        Transaction(
-            id = 1,
-            title = "Transfer from Michael",
-            category = "Account Transfer",
-            amount = 150000.0,
-            formattedAmount = "+ Rp 150.000",
-            iconRes = R.drawable.ic_card_outline,
-            iconBgColor = CatBlue,
-            isIncome = true,
-            date = System.currentTimeMillis()
-        ),
-        Transaction(
-            id = 2,
-            title = "Warung Mba Sri",
-            category = "Food and Beverages",
-            amount = 19000.0,
-            formattedAmount = "- Rp 19.000",
-            iconRes = R.drawable.ic_food_outline,
-            iconBgColor = CatOrange,
-            isIncome = false,
-            date = System.currentTimeMillis()
-        ),
-        Transaction(
-            id = 3,
-            title = "Aeon Supermarket",
-            category = "Groceries",
-            amount = 148300.0,
-            formattedAmount = "- Rp 148.300",
-            iconRes = R.drawable.ic_cart_outline,
-            iconBgColor = CatPurple,
-            isIncome = false,
-            date = System.currentTimeMillis() - 86400000
-        )
-    )
-}
-
 @Composable
 fun BottomSpacer(){
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 20.dp, bottom = 0.dp), // Bottom padding biar naik dr navbar
+            .padding(top = 20.dp, bottom = 0.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -736,17 +679,16 @@ fun BottomSpacer(){
                 .width(40.dp)
                 .height(4.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(UISurface) // Warna abu gelap
+                .background(UISurface)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Logo atau Icon kecil pudar
         Icon(
-            // Pake icon apa aja, misal icon wallet
             painter = painterResource(id = R.drawable.ic_wallet_outline),
             contentDescription = null,
-            tint = UIGray.copy(alpha = 0.3f), // Pudar banget
+            tint = UIGray.copy(alpha = 0.3f),
             modifier = Modifier.size(24.dp)
         )
 
@@ -757,13 +699,11 @@ fun BottomSpacer(){
             text = "You are up to date",
             style = AppFont.Medium.copy(
                 fontSize = 12.sp,
-                color = UIGray.copy(alpha = 0.3f) // Pudar banget
+                color = UIGray.copy(alpha = 0.3f)
             )
         )
     }
 }
-
-// --- TAMBAHAN BARU DI BAGIAN BAWAH FILE ---
 
 @Composable
 fun HomeScreen(
@@ -771,7 +711,6 @@ fun HomeScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    // --- TAMBAHAN LOGIC CEK STATUS SYSTEM ---
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var isListenerActive by remember { mutableStateOf(false) }
@@ -790,10 +729,9 @@ fun HomeScreen(
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        checkStatus() // Cek awal
+        checkStatus()
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    // ----------------------------------------
 
     LazyColumn(
         modifier = Modifier
@@ -802,7 +740,6 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
         contentPadding = PaddingValues(bottom = 150.dp, top = 20.dp)
     ) {
-        // GANTI state.isListenerActive JADI variabel lokal isListenerActive
         item { HeaderSection(isActive = isListenerActive) }
 
         item {
@@ -828,7 +765,7 @@ fun HomeScreen(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF0B0E11) // Warna UIBackground
+@Preview(showBackground = true, backgroundColor = 0xFF0B0E11)
 @Composable
 fun DashboardScreenPreview() {
     DashboardScreen(viewModel())

@@ -41,8 +41,7 @@ fun AddTransactionScreen(
     var selectedCategory by remember { mutableStateOf("Food") }
     var isIncome by remember { mutableStateOf(false) }
 
-    // --- UPDATE: Mapping Kategori pake R.drawable ---
-    // Pastikan nama file icon (ic_food, ic_transport, dll) sesuai yang ada di folder drawable kamu
+    // --- Mapping Kategori dengan R.drawable ---
     val categories = listOf(
         Triple("Food and Beverages", R.drawable.ic_food_outline, CatOrange),
         Triple("Transportation", R.drawable.ic_car_outline, CatGreen),
@@ -175,7 +174,7 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(30.dp))
 
-            // --- 4. CATEGORY GRID (Pake PainterResource) ---
+            // --- 4. CATEGORY GRID ---
             Text("Category", style = AppFont.Bold.copy(fontSize = 16.sp, color = UIWhite))
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -201,7 +200,6 @@ fun AddTransactionScreen(
                                     .border(width = 2.dp, color = if (isSelected) UIWhite.copy(0.2f) else Color.Transparent, shape = CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
-                                // GANTI PAKE PAINTER RESOURCE
                                 Icon(
                                     painter = painterResource(id = catIconRes),
                                     contentDescription = null,

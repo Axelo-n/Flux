@@ -24,9 +24,6 @@ class MainActivity : ComponentActivity() {
                 val note = intent.getStringExtra("note") ?: "Auto-detected"
                 val isIncome = intent.getBooleanExtra("isIncome", false)
 
-                // SURUH VIEWMODEL NYIMPEN
-                // (Kita butuh akses ke ViewModel disini. Karena pake factory manual,
-                // kita bisa akses lewat variable yg udah di-init di onCreate)
                 viewModel.addTransaction(amount, note, category, isIncome)
 
                 Toast.makeText(context, "Flux detected: $note", Toast.LENGTH_SHORT).show()
@@ -34,7 +31,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Variable viewModel biar bisa diakses receiver
+    // Variable viewModel
     private lateinit var viewModel: DashboardViewModel
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -50,7 +47,6 @@ class MainActivity : ComponentActivity() {
         val viewModelFactory = DashboardViewModelFactory(repository)
 
         // DAFTARKAN ANTENA (RECEIVER)
-        // Android 13+ butuh flag RECEIVER_EXPORTED atau NOT_EXPORTED
         val filter = IntentFilter("com.example.flux.NEW_TRANSACTION_DETECTED")
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(transactionReceiver, filter, Context.RECEIVER_EXPORTED)
@@ -60,8 +56,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             FluxTheme {
-                // 3. Kita inject ViewModel pakai Factory ini ke DashboardScreen
-                // Caranya: Kita panggil ViewModel-nya DISINI, lalu oper ke DashboardScreen
                 val viewModel: DashboardViewModel = viewModel(factory = viewModelFactory)
 
                 DashboardScreen(viewModel = viewModel)
@@ -70,7 +64,6 @@ class MainActivity : ComponentActivity() {
 
         fun onDestroy() {
             super.onDestroy()
-            // Matikan antena pas aplikasi ditutup total
             unregisterReceiver(transactionReceiver)
         }
     }

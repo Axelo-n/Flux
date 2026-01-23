@@ -26,7 +26,7 @@ fun FluxAlertDialog(
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(24.dp))
-                .background(UISurface) // Warna dasar dialog
+                .background(UISurface)
                 .padding(24.dp)
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
