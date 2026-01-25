@@ -236,7 +236,7 @@ fun EditTransactionScreen(
                                 )
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = catName, style = AppFont.Medium.copy(fontSize = 12.sp, color = if (isSelected) UIWhite else UIGray), maxLines = 1)
+                            Text(text = catName, style = AppFont.Medium.copy(fontSize = 12.sp, color = if (isSelected) UIWhite else UIGray), maxLines = 2, textAlign = TextAlign.Center)
                         }
                     }
                 }

@@ -306,11 +306,11 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
         // --- SMART PARSER RULES ---
         SectionLabel("SMART PARSER RULES")
 
-        // 1. Tombol Add (Tetap dipisah biar gampang diakses)
+        // 1. Add Button
         FluxCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp) // Jarak dikit ke list bawahnya
+                .padding(bottom = 8.dp)
                 .clickable { showAddDialog = true }
         ) {
             Row(
@@ -328,9 +328,8 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
             }
         }
 
-        // 2. LIST RULES (Disatukan dalam 1 Card)
+        // 2. Rules List
         if (parserRules.isEmpty()) {
-            // State Kosong (Desain Minimalis)
             Text(
                 "No custom rules yet. Flux uses default logic.",
                 style = AppFont.Regular.copy(color = UIGray.copy(0.5f), fontSize = 12.sp),
@@ -344,31 +343,30 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp), // Padding item lebih compact
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Bagian Teks
+                            // Text
                             Column(modifier = Modifier.weight(1f)) {
-                                // Keyword (Utama)
+                                // Keyword
                                 Text(
                                     text = rule.keyword,
                                     style = AppFont.SemiBold.copy(color = UIWhite, fontSize = 14.sp)
                                 )
-                                // Detail (Kategori & Note)
+                                // Detail
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // Titik Warna Kategori (Visual Cue)
+                                    // Visual Cue
                                     Box(
                                         modifier = Modifier
                                             .size(6.dp)
                                             .clip(CircleShape)
-                                            .background(CatOrange) // Bisa diganti dynamic color kalo mau
+                                            .background(CatOrange)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = rule.targetCategory,
                                         style = AppFont.Medium.copy(color = UIGray, fontSize = 11.sp)
                                     )
-                                    // Tampilkan Note kalau ada
                                     if (!rule.targetNote.isNullOrEmpty()) {
                                         Text(
                                             text = " • ${rule.targetNote}",
@@ -379,7 +377,7 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                                 }
                             }
 
-                            // Tombol Hapus (Kecil & Subtle)
+                            // Delete Button
                             IconButton(
                                 onClick = { viewModel.deleteParserRule(rule) },
                                 modifier = Modifier.size(28.dp)
@@ -387,17 +385,16 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
                                     contentDescription = "Delete",
-                                    tint = UIGray.copy(0.4f), // Warna agak samar biar ga kepencet
+                                    tint = UIGray.copy(0.4f),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
 
-                        // --- DIVIDER (Garis Pemisah) ---
-                        // Tampilkan garis KECUALI di item terakhir
+                        // --- DIVIDER ---
                         if (index < parserRules.lastIndex) {
                             HorizontalDivider(
-                                modifier = Modifier.padding(start = 16.dp), // Indent dikit biar rapi kayak iOS
+                                modifier = Modifier.padding(start = 16.dp),
                                 thickness = 0.5.dp,
                                 color = UIGray.copy(alpha = 0.15f)
                             )
@@ -407,7 +404,7 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(100.dp))
+        Spacer(modifier = Modifier.height(150.dp))
     }
 
     if (showAddDialog) {
