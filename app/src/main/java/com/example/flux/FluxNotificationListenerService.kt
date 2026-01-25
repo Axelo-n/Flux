@@ -27,7 +27,7 @@ class FluxNotificationListenerService : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
         val database = TransactionDatabase.getDatabase(applicationContext)
-        repository = TransactionRepository(database.transactionDao())
+        repository = TransactionRepository(database.transactionDao(), parserRuleDao = database.parserRuleDao())
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -50,10 +50,15 @@ class FluxNotificationListenerService : NotificationListenerService() {
         if (packageName !in allowedApps) return
 
         // 3. PARSING
-        val transaction = NotificationTransactionParser.parse(title, text)
+        serviceScope.launch {
+            // A. Initialize Rules
+            val customRules = repository.getRulesSync()
 
-        if (transaction != null) {
-            serviceScope.launch {
+            // B. Give Rules to Parser
+            val transaction = NotificationTransactionParser.parse(title, text, customRules)
+
+            // C. Save if Valid
+            if (transaction != null) {
                 val newTx = TransactionEntity(
                     amount = transaction.amount,
                     note = transaction.note,
@@ -62,7 +67,6 @@ class FluxNotificationListenerService : NotificationListenerService() {
                     date = System.currentTimeMillis()
                 )
                 repository.insert(newTx)
-
                 sendSuccessNotification(transaction)
             }
         }

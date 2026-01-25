@@ -11,26 +11,45 @@ data class ParsedTransaction(
 
 object NotificationTransactionParser {
 
-    fun parse(title: String, text: String): ParsedTransaction? {
+    fun parse(title: String, text: String, customRules: List<ParserRule>): ParsedTransaction? {
         val fullText = "$title $text".lowercase(Locale.getDefault())
 
         // 1. CARI ANGKA
         val amount = extractAmount(fullText)
         if (amount <= 0) return null
 
-        // 2. TENTUKAN INCOME / EXPENSE (Logic Khusus Bank)
+        // 2. TENTUKAN INCOME / EXPENSE
         val isIncome = isIncomeTransaction(fullText)
 
-        // 3. TEBAK KATEGORI
-        val category = detectCategory(fullText, isIncome)
+        // 3. CUSTOM RULES
+        // Default value
+        var category = "Other"
+        var finalNote = if (text.length > 40) text.take(40) + "..." else text
 
-        // 4. BERSIHKAN NOTE
-        val note = if (text.length > 40) text.take(40) + "..." else text
+        var ruleFound = false
+
+        for (rule in customRules) {
+            if (fullText.contains(rule.keyword.lowercase())) {
+                category = rule.targetCategory
+
+                if (!rule.targetNote.isNullOrEmpty()) {
+                    finalNote = rule.targetNote
+                }
+
+                ruleFound = true
+                break
+            }
+        }
+
+        // 4. FALLBACK
+        if (!ruleFound) {
+            category = detectCategory(fullText, isIncome)
+        }
 
         return ParsedTransaction(
             amount = amount,
             category = category,
-            note = note,
+            note = finalNote,
             isIncome = isIncome
         )
     }
@@ -62,31 +81,20 @@ object NotificationTransactionParser {
     }
 
     private fun detectCategory(text: String, isIncome: Boolean): String {
-        if (isIncome) return "Salary"
+        if (isIncome) return "Income"
 
-        // LOGIC KATEGORI
-        return when {
-            // Makanan
-            text.contains("kopi") || text.contains("cafe") || text.contains("resto") ||
-                    text.contains("food") || text.contains("mcd") || text.contains("kfc") -> "Food and Beverages"
+        val categories = mapOf(
+            "Food and Beverages" to listOf("kopi", "makan", "food", "restoran", "cafe", "starbucks", "mcd", "kfc", "go-food", "gofood", "grabfood", "shopeefood"),
+            "Transportation" to listOf("go-ride", "goride", "grab", "gojek", "bensin", "parkir", "tol", "shell", "pertamina"),
+            "Groceries and Shopping" to listOf("indomaret", "alfamart", "superindo", "tokopedia", "shopee", "lazada", "tiktok"),
+            "Entertainment" to listOf("netflix", "spotify", "steam", "bioskop", "cinema", "game", "top up game"),
+            "Account Transfer" to listOf("transfer ke", "kirim dana", "bca", "mandiri", "bri", "bni")
+        )
 
-            // Transport & Bensin
-            text.contains("gojek") || text.contains("grab") || text.contains("shell") ||
-                    text.contains("pertamina") || text.contains("parkir") -> "Transportation"
-
-            // Belanja
-            text.contains("tokopedia") || text.contains("shopee") || text.contains("alfamart") ||
-                    text.contains("indomaret") || text.contains("supermarket") -> "Groceries and Shopping"
-
-            // Hiburan/Langganan
-            text.contains("netflix") || text.contains("spotify") || text.contains("steam") ||
-                    text.contains("google play") -> "Entertainment"
-
-            // Transfer ke orang / Topup E-wallet
-            text.contains("transfer") || text.contains("top up") || text.contains("gopay") ||
-                    text.contains("ovo") || text.contains("dana") -> "Account Transfer"
-
-            else -> "Other"
+        for ((category, keywords) in categories) {
+            if (keywords.any { text.contains(it) }) return category
         }
+
+        return "Other"
     }
 }

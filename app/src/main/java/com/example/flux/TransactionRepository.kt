@@ -2,7 +2,11 @@ package com.example.flux
 
 import kotlinx.coroutines.flow.Flow
 
-class TransactionRepository(private val transactionDao: TransactionDao) {
+// Update Constructor: Tambahkan parserRuleDao
+class TransactionRepository(
+    private val transactionDao: TransactionDao,
+    private val parserRuleDao: ParserRuleDao
+) {
 
     val allTransactions: Flow<List<TransactionEntity>> = transactionDao.getAllTransactions()
 
@@ -15,5 +19,24 @@ class TransactionRepository(private val transactionDao: TransactionDao) {
 
     suspend fun delete(id: Int) {
         transactionDao.deleteById(id)
+    }
+
+    // --- CUSTOM RULES ---
+
+    // 1. Live Data
+    val allRules: Flow<List<ParserRule>> = parserRuleDao.getAllRules()
+
+    // 2. Add/Delete
+    suspend fun insertRule(rule: ParserRule) {
+        parserRuleDao.insert(rule)
+    }
+
+    suspend fun deleteRule(rule: ParserRule) {
+        parserRuleDao.delete(rule)
+    }
+
+    // 3. Service
+    suspend fun getRulesSync(): List<ParserRule> {
+        return parserRuleDao.getAllRulesSync()
     }
 }

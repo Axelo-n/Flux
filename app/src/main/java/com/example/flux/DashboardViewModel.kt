@@ -98,7 +98,34 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         }
     }
 
-    // --- 3. FITUR DEBUG (INJECT BALANCE) ---
+    // --- 3. FITUR PARSER ---
+    // Live Rules Data
+    val parserRules = repository.allRules.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    // Add Rule
+    fun addParserRule(keyword: String, category: String, note: String?) {
+        viewModelScope.launch {
+            val newRule = ParserRule(
+                keyword = keyword,
+                targetCategory = category,
+                targetNote = note
+            )
+            repository.insertRule(newRule)
+        }
+    }
+
+    // Delete Rule
+    fun deleteParserRule(rule: ParserRule) {
+        viewModelScope.launch {
+            repository.deleteRule(rule)
+        }
+    }
+
+    // --- 4. FITUR DEBUG (INJECT BALANCE) ---
 
     fun injectCurrentBalance(amount: Double) {
         viewModelScope.launch {
@@ -126,7 +153,7 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         }
     }
 
-    // --- 4. HELPER & LOGIC ---
+    // --- 5. HELPER & LOGIC ---
 
     fun getTransactionById(id: Int): Transaction? {
         return uiState.value.recentTransactions.find { it.id == id }

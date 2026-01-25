@@ -40,8 +40,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         // 1. Siapkan Database & Repository
-        val database = AppDatabase.getDatabase(this)
-        val repository = TransactionRepository(database.transactionDao())
+        val database = TransactionDatabase.getDatabase(this)
+        val repository = TransactionRepository(database.transactionDao(), database.parserRuleDao())
 
         // 2. Siapkan Factory
         val viewModelFactory = DashboardViewModelFactory(repository)
