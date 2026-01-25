@@ -70,8 +70,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.flux.ui.theme.AppFont
 import com.example.flux.ui.theme.CatBlue
-import com.example.flux.ui.theme.CatOrange
-import com.example.flux.ui.theme.CatPurple
 import com.example.flux.ui.theme.UIBackground
 import com.example.flux.ui.theme.UIBlack
 import com.example.flux.ui.theme.UIBlue
@@ -140,7 +138,7 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
                 modifier = Modifier.fillMaxSize()
             ) {
                 composable(FluxRoutes.HOME) { HomeScreen(viewModel = viewModel) }
-                composable(FluxRoutes.ANALYTICS) { PlaceholderScreen("Coming Soon") }
+                composable(FluxRoutes.ANALYTICS) { AnalyticsScreen(viewModel = viewModel) }
                 composable(FluxRoutes.HISTORY) {
                     HistoryScreen(
                         viewModel = viewModel,
@@ -404,6 +402,23 @@ fun SpendingGraphSection(dataPoints: List<DayData>) {
                             val paddingBottom = 10.dp.toPx()
                             val paddingTop = 10.dp.toPx()
                             val drawingHeight = size.height - paddingBottom - paddingTop
+
+                            // --- GRID LINES ---
+                            val stepHeight = drawingHeight / 4
+                            for (i in 0..4) {
+                                val yPos = (i * stepHeight) + paddingTop
+
+                                drawLine(
+                                    color = UIGray.copy(alpha = 0.3f),
+                                    start = Offset(0f, yPos),
+                                    end = Offset(size.width, yPos),
+                                    strokeWidth = 1.dp.toPx(),
+                                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
+                                        floatArrayOf(10f, 10f),
+                                        0f
+                                    )
+                                )
+                            }
 
                             // Garis Axis
                             drawLine(

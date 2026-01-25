@@ -5,10 +5,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.flux.ui.theme.*
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -230,6 +233,86 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             graphData = graphData
         )
     }
+
+    // --- ANALYTICS LOGIC ---
+
+    // State untuk filter tanggal di Analytics Screen
+    private val _analyticsDate = MutableStateFlow(Calendar.getInstance())
+    val analyticsDate = _analyticsDate.asStateFlow()
+
+    fun nextMonth() {
+        _analyticsDate.update {
+            val next = it.clone() as Calendar
+            next.add(Calendar.MONTH, 1)
+            next
+        }
+    }
+
+    fun prevMonth() {
+        _analyticsDate.update {
+            val prev = it.clone() as Calendar
+            prev.add(Calendar.MONTH, -1)
+            prev
+        }
+    }
+
+    // Fungsi Kalkulasi Data Bulanan
+    fun getMonthlyAnalytics(selectedDate: Calendar, allTransactions: List<Transaction>): MonthlyAnalyticsState {
+        val targetMonth = selectedDate.get(Calendar.MONTH)
+        val targetYear = selectedDate.get(Calendar.YEAR)
+
+        // 1. Filter Transaksi Bulan Ini
+        val monthlyTx = allTransactions.filter {
+            val c = Calendar.getInstance().apply { timeInMillis = it.date }
+            c.get(Calendar.MONTH) == targetMonth && c.get(Calendar.YEAR) == targetYear
+        }
+
+        // 2. Hitung Total Global
+        val totalExpense = monthlyTx.filter { !it.isIncome }.sumOf { it.amount }
+        val totalIncome = monthlyTx.filter { it.isIncome }.sumOf { it.amount }
+
+        // 3. Grouping per Kategori (Pie Chart Data)
+        val expensesOnly = monthlyTx.filter { !it.isIncome }
+        val groupedStats = expensesOnly.groupBy { it.category }.map { (cat, list) ->
+            val catTotal = list.sumOf { it.amount }
+            val percent = if (totalExpense > 0) (catTotal / totalExpense).toFloat() else 0f
+            val (icon, color) = getCategoryStyle(cat, false)
+
+            CategoryStat(cat, catTotal, percent, color, icon)
+        }.sortedByDescending { it.percentage }
+
+        // --- 4. Grafik Harian ---
+        // Cari tahu bulan ini ada berapa hari
+        val maxDaysInMonth = selectedDate.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+        // Loop dari tanggal 1 sampai terakhir
+        val dailyGraphData = (1..maxDaysInMonth).map { day ->
+            // Cari transaksi expense di tanggal 'day' ini
+            val expenseThatDay = monthlyTx.filter {
+                val c = Calendar.getInstance().apply { timeInMillis = it.date }
+                !it.isIncome && c.get(Calendar.DAY_OF_MONTH) == day
+            }.sumOf { it.amount }
+
+            // Tentukan Limit (Sabtu/Minggu 60k, Biasa 40k)
+            val checkDate = selectedDate.clone() as Calendar
+            checkDate.set(Calendar.DAY_OF_MONTH, day)
+            val dayOfWeek = checkDate.get(Calendar.DAY_OF_WEEK)
+            val limit = if (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY) 60000f else 40000f
+
+            DayData(
+                day = day.toString(),
+                amount = expenseThatDay.toFloat(),
+                limit = limit
+            )
+        }
+
+        return MonthlyAnalyticsState(
+            totalExpense = formatRupiah(totalExpense),
+            totalIncome = formatRupiah(totalIncome),
+            categoryStats = groupedStats,
+            dailyGraphData = dailyGraphData
+        )
+    }
 }
 
 // Class Pembantu Data Analytics
@@ -252,3 +335,19 @@ class DashboardViewModelFactory(private val repository: TransactionRepository) :
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
+
+// Data Class pembantu untuk Analytics Screen
+data class CategoryStat(
+    val category: String,
+    val total: Double,
+    val percentage: Float,
+    val color: Color,
+    val icon: Int
+)
+
+data class MonthlyAnalyticsState(
+    val totalExpense: String = "Rp 0",
+    val totalIncome: String = "Rp 0",
+    val categoryStats: List<CategoryStat> = emptyList(),
+    val dailyGraphData: List<DayData> = emptyList()
+)
