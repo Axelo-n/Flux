@@ -81,6 +81,7 @@ import com.example.flux.ui.theme.UIRed
 import com.example.flux.ui.theme.UISurface
 import com.example.flux.ui.theme.UITeal
 import com.example.flux.ui.theme.UIWhite
+import java.util.Calendar
 
 @Composable
 fun DashboardScreen(viewModel: DashboardViewModel) {
@@ -494,10 +495,30 @@ fun RecentTransactionsCard(transactions: List<Transaction>) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            transactions.forEachIndexed { index, transaction ->
-                TransactionRowItem(transaction)
-                if (index < transactions.size - 1) {
-                    Spacer(modifier = Modifier.height(10.dp))
+            val calendar = Calendar.getInstance()
+            val todayDay = calendar.get(Calendar.DAY_OF_YEAR)
+            val todayYear = calendar.get(Calendar.YEAR)
+
+            val todaysTransactions = transactions.filter { transaction ->
+                val txCalendar = Calendar.getInstance()
+                txCalendar.timeInMillis = transaction.date
+
+                // Bandingkan Hari dan Tahun
+                txCalendar.get(Calendar.DAY_OF_YEAR) == todayDay &&
+                        txCalendar.get(Calendar.YEAR) == todayYear
+            }
+            if (todaysTransactions.isEmpty()) {
+                Text(
+                    text = "No transactions today",
+                    style = AppFont.Regular.copy(color = UIGray, fontSize = 14.sp),
+                    modifier = Modifier.padding(vertical = 20.dp)
+                )
+            } else {
+                todaysTransactions.forEachIndexed { index, transaction ->
+                    TransactionRowItem(transaction)
+                    if (index < todaysTransactions.size - 1) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
                 }
             }
         }

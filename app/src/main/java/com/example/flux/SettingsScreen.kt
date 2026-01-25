@@ -36,8 +36,10 @@ import androidx.core.content.ContextCompat
 import com.example.flux.ui.theme.*
 import androidx.core.graphics.toColorInt
 import android.provider.Settings
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun SettingsScreen(viewModel: DashboardViewModel) {
@@ -127,7 +129,7 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
                             painter = painterResource(R.drawable.flux_transparent),
                             contentDescription = null,
                             tint = if (isServiceActive) UITeal else UIGray,
-                            modifier = Modifier.size(30.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
