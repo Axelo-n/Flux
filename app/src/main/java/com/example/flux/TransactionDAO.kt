@@ -32,4 +32,16 @@ interface TransactionDao {
     // 6. Perintah Hapus berdasarkan ID
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteById(id: Int)
+
+    // BUAT BACKUP (Ambil semua tanpa Flow)
+    @Query("SELECT * FROM transactions")
+    suspend fun getAllTransactionsSync(): List<TransactionEntity>
+
+    // BUAT RESTORE (Masukin banyak sekaligus, timpa kalau id sama)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(transactions: List<TransactionEntity>)
+
+    // Hapus semua sebelum restore (Opsional, biar bersih)
+    @Query("DELETE FROM transactions")
+    suspend fun clearAll()
 }

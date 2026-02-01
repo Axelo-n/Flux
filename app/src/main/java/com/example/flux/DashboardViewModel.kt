@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.flux.ui.theme.*
+import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -339,6 +340,29 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             categoryStats = groupedStats,
             dailyGraphData = dailyGraphData
         )
+    }
+
+    // 1. FUNGSI EXPORT (Output: String JSON)
+    suspend fun createBackupJson(): String {
+        val transactions = repository.getAllTransactionsSync()
+        val rules = repository.getRulesSync()
+
+        val backupData = FluxBackupData(transactions, rules)
+        return Gson().toJson(backupData)
+    }
+
+    // 2. FUNGSI IMPORT (Input: String JSON)
+    fun restoreFromBackup(jsonString: String, onSuccess: () -> Unit, onError: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val backupData = Gson().fromJson(jsonString, FluxBackupData::class.java)
+                repository.restoreData(backupData)
+                onSuccess()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onError()
+            }
+        }
     }
 }
 

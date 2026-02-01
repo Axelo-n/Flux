@@ -14,3 +14,8 @@ data class TransactionEntity(
     val isIncome: Boolean,
     val date: Long = System.currentTimeMillis()
 )
+
+data class FluxBackupData(
+    val transactions: List<TransactionEntity>,
+    val rules: List<ParserRule>
+)

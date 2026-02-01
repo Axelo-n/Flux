@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Entity
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
@@ -29,4 +30,11 @@ interface ParserRuleDao {
 
     @Delete
     suspend fun delete(rule: ParserRule)
+
+    // BUAT RESTORE
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(rules: List<ParserRule>)
+
+    @Query("DELETE FROM parser_rules")
+    suspend fun clearAll()
 }

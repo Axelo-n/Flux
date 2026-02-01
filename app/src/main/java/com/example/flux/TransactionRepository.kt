@@ -39,4 +39,17 @@ class TransactionRepository(
     suspend fun getRulesSync(): List<ParserRule> {
         return parserRuleDao.getAllRulesSync()
     }
+
+    // --- FITUR BACKUP & RESTORE ---
+    suspend fun getAllTransactionsSync() = transactionDao.getAllTransactionsSync()
+
+    suspend fun restoreData(backup: FluxBackupData) {
+        // Opsional: Hapus data lama dulu biar ga duplikat aneh-aneh
+        transactionDao.clearAll()
+        parserRuleDao.clearAll()
+
+        // Masukin data dari backup
+        transactionDao.insertAll(backup.transactions)
+        parserRuleDao.insertAll(backup.rules)
+    }
 }
