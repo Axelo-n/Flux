@@ -61,24 +61,62 @@ object NotificationTransactionParser {
                 text.contains("refund")
     }
 
-    private fun extractAmount(text: String): Double {
-        // Hapus titik ribuan
-        var cleanText = text.replace(".", "").replace(",", "")
+    fun extractAmount(text: String): Double {
+        val lowerText = text.lowercase()
 
-        var multiplier = 1.0
-        if (cleanText.contains("juta")) {
-            multiplier = 1000000.0
-            cleanText = cleanText.replace("juta", "")
-        } else if (cleanText.contains("ribu") || cleanText.contains("rb")) {
-            multiplier = 1000.0
-            cleanText = cleanText.replace("ribu", "").replace("rb", "")
+        // --- PRIORITAS 1: Cari Format Currency (Rp / IDR) ---
+        // Penjelasan Regex:
+        // (?:rp\.?|idr) -> Cari kata "rp", "rp.", atau "idr" (hiraukan case)
+        // \s*           -> Spasi boleh ada, boleh nggak
+        // ([\d\.]+)     -> Tangkap semua angka dan titik setelahnya
+        val currencyRegex = Regex("(?:rp\\.?|idr)\\s*([\\d\\.]+)")
+        val currencyMatch = currencyRegex.find(lowerText)
+
+        if (currencyMatch != null) {
+            // Ambil grup ke-1 (angkanya aja), lalu buang titik ribuan
+            val rawNumber = currencyMatch.groupValues[1].replace(".", "")
+            return rawNumber.toDoubleOrNull() ?: 0.0
         }
 
-        val numberRegex = Regex("\\d+")
-        val match = numberRegex.find(cleanText)
+        // --- PRIORITAS 2: Cari Angka Standalone (Berdiri Sendiri) ---
+        // Penjelasan Regex:
+        // (?<![a-z0-9]) -> Sebelum angka, TIDAK BOLEH ada huruf atau angka lain
+        // (\d[\d\.]+)   -> Tangkap angka utamanya (minimal 2 digit/titik biar ga nangkep typo)
+        // (?![a-z0-9])  -> Setelah angka, TIDAK BOLEH ada huruf atau angka lain
+        val standaloneRegex = Regex("(?<![a-z0-9])(\\d[\\d\\.]+)(?![a-z0-9])")
+        val matches = standaloneRegex.findAll(lowerText)
 
-        return (match?.value?.toDoubleOrNull() ?: 0.0) * multiplier
+        var maxAmount = 0.0
+        for (match in matches) {
+            val rawNumber = match.value.replace(".", "")
+            val num = rawNumber.toDoubleOrNull() ?: 0.0
+
+            // Kita ambil angka terbesar yang ditemuin di teks
+            if (num > maxAmount) {
+                maxAmount = num
+            }
+        }
+
+        return maxAmount
     }
+//    private fun extractAmount(text: String): Double {
+//        // Hapus titik ribuan
+//        var cleanText = text.replace(".", "").replace(",", "")
+//
+//        var multiplier = 1.0
+//        if (cleanText.contains("juta")) {
+//            multiplier = 1000000.0
+//            cleanText = cleanText.replace("juta", "")
+//        } else if (cleanText.contains("ribu") || cleanText.contains("rb")) {
+//            multiplier = 1000.0
+//            cleanText = cleanText.replace("ribu", "").replace("rb", "")
+//        }
+//
+//        val numberRegex = Regex("\\d+")
+//        val match = numberRegex.find(cleanText)
+//
+//        return (match?.value?.toDoubleOrNull() ?: 0.0) * multiplier
+//    }
 
     private fun detectCategory(text: String, isIncome: Boolean): String {
         if (isIncome) return "Income"

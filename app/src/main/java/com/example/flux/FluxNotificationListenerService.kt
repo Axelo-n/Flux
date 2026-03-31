@@ -56,6 +56,7 @@ class FluxNotificationListenerService : NotificationListenerService() {
             .setContentTitle("Flux Auto-Record is Active")
             .setContentText("Listening to bank notifications...")
             .setSmallIcon(R.drawable.flux_transparent) // Pastiin icon ini bener ada
+            .setColor("#0B0E14".toColorInt())
             .setOngoing(true) // INI KUNCINYA: Ga bisa di-swipe sama user/sistem
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
@@ -143,9 +144,13 @@ class FluxNotificationListenerService : NotificationListenerService() {
             .setContentText(contentText)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setGroup("FLUX_TRANSACTIONS") // <--- TAMBAHAN 1: Pisahin grup biar ga numpuk
             .build()
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        // <--- TAMBAHAN 2: Bikin ID yang aman dari Integer Overflow dan ga nabrak ID tameng
+        val safeNotifId = (System.currentTimeMillis() % 100000).toInt() + 2000
+
+        notificationManager.notify(safeNotifId, notification)
     }
 
     override fun onDestroy() {

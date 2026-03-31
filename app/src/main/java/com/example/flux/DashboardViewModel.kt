@@ -189,6 +189,7 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
     }
 
     // Logic Perhitungan Keuangan (Separation Current vs Extra)
+    // Logic Perhitungan Keuangan (Separation Current vs Extra)
     fun calculateAnalytics(transactions: List<Transaction>): AnalyticsState {
         val calendar = Calendar.getInstance()
         val todayDay = calendar.get(Calendar.DAY_OF_YEAR)
@@ -198,22 +199,45 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         var totalExpense = 0.0
         var extraBalance = 0.0
 
+        // Handle kalo data masih kosong banget
+        if (transactions.isEmpty()) {
+            val emptyGraph = (0..6).map { i ->
+                val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -((6 - i))) }
+                val dOfWeek = c.get(Calendar.DAY_OF_WEEK)
+                val dLimit = if (dOfWeek == Calendar.SATURDAY || dOfWeek == Calendar.SUNDAY) 60000f else 40000f
+                val dayLabel = SimpleDateFormat("EEE", Locale.getDefault()).format(c.time)
+                DayData(dayLabel, 0f, dLimit)
+            }
+            return AnalyticsState("Rp 0", 0f, "Rp 0", "Rp 0", true, emptyGraph)
+        }
+
         val txByDay = transactions.groupBy {
             val c = Calendar.getInstance().apply { timeInMillis = it.date }
             "${c.get(Calendar.DAY_OF_YEAR)}-${c.get(Calendar.YEAR)}"
         }
 
-        // Loop Hari
-        txByDay.forEach { (_, txList) ->
-            val txDate = Calendar.getInstance().apply { timeInMillis = txList.first().date }
-            val dayOfWeek = txDate.get(Calendar.DAY_OF_WEEK)
+        // 1. Cari tanggal pertama kali transaksi dibuat
+        val firstTxDate = transactions.minOf { it.date }
+
+        val startCal = Calendar.getInstance().apply { timeInMillis = firstTxDate }
+        // Nol-kan jam biar akurat pas di-loop
+        startCal.set(Calendar.HOUR_OF_DAY, 0); startCal.set(Calendar.MINUTE, 0); startCal.set(Calendar.SECOND, 0); startCal.set(Calendar.MILLISECOND, 0)
+
+        val endCal = Calendar.getInstance()
+        endCal.set(Calendar.HOUR_OF_DAY, 0); endCal.set(Calendar.MINUTE, 0); endCal.set(Calendar.SECOND, 0); endCal.set(Calendar.MILLISECOND, 0)
+
+        // 2. Loop dari hari pertama sampai hari ini (Termasuk hari yang ga ada transaksinya)
+        while (startCal <= endCal) {
+            val dKey = "${startCal.get(Calendar.DAY_OF_YEAR)}-${startCal.get(Calendar.YEAR)}"
+            val txList = txByDay[dKey] ?: emptyList() // Kalo kosong, balikin list kosong, JANGAN di-skip
+
+            val isToday = (startCal == endCal)
+            val dayOfWeek = startCal.get(Calendar.DAY_OF_WEEK)
             val dailyLimit = if (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY) 60000.0 else 40000.0
 
-            // Filter Income
+            // Filter
             val incomeForCurrent = txList.filter { it.isIncome && it.category != "Injection_Extra" }.sumOf { it.amount }
             val incomeForExtra = txList.filter { it.isIncome && it.category != "Injection_Current" }.sumOf { it.amount }
-
-            // Filter Expense
             val daysExpense = txList.filter { !it.isIncome }.sumOf { it.amount }
 
             totalIncomeForCurrent += incomeForCurrent
@@ -221,12 +245,24 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             extraBalance += incomeForExtra
 
             val dailyLeft = dailyLimit - daysExpense
-            if (dailyLeft < 0) {
+
+            // 3. LOGIC SISA EXTRA BALANCE
+            if (isToday) {
+                // Khusus HARI INI: Cuma potong kalo overspent.
+                // Sisa positif jangan dimasukin dulu karena hari belum berakhir (lu masih bisa jajan nanti malem)
+                if (dailyLeft < 0) {
+                    extraBalance += dailyLeft // Ngurangin karena minus
+                }
+            } else {
+                // HARI SEBELUMNYA: Semua sisa (plus atau minus) mutlak masuk ke Extra Balance
                 extraBalance += dailyLeft
             }
+
+            // Maju ke hari berikutnya
+            startCal.add(Calendar.DAY_OF_YEAR, 1)
         }
 
-        // Data Hari Ini
+        // Data Hari Ini buat di UI Atas
         val dayOfWeekToday = calendar.get(Calendar.DAY_OF_WEEK)
         val limitToday = if (dayOfWeekToday == Calendar.SATURDAY || dayOfWeekToday == Calendar.SUNDAY) 60000.0 else 40000.0
         val todayTx = transactions.filter {
