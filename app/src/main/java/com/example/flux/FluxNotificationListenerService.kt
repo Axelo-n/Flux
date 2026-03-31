@@ -30,6 +30,46 @@ class FluxNotificationListenerService : NotificationListenerService() {
         repository = TransactionRepository(database.transactionDao(), parserRuleDao = database.parserRuleDao())
     }
 
+    // --- 1. SUNTIKAN TAMENG FOREGROUND SERVICE ---
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        // Langsung nyalain tameng pas service berhasil konek ke sistem
+        startMyForegroundService()
+    }
+
+    private fun startMyForegroundService() {
+        val channelId = "flux_persistent_channel"
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Bikin Channel (Wajib buat Android 8+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Flux Background Service",
+                NotificationManager.IMPORTANCE_MIN // Pake MIN biar ga bunyi/getar, nyelip anteng di bawah
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        // Desain Notifikasi "Tameng"
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Flux Auto-Record is Active")
+            .setContentText("Listening to bank notifications...")
+            .setSmallIcon(R.drawable.flux_transparent) // Pastiin icon ini bener ada
+            .setOngoing(true) // INI KUNCINYA: Ga bisa di-swipe sama user/sistem
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .build()
+
+        // Eksekusi jadi Foreground (ID 1999 bebas)
+        startForeground(1999, notification)
+    }
+
+    // Matiin tameng kalo service putus/dimatiin manual
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
 
