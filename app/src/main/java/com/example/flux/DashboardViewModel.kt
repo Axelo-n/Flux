@@ -28,8 +28,8 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         repository.totalExpense
     ) { transactions, _, _ ->
 
-        // A. Convert Entity Database ke Model UI
-        val uiTransactions = transactions.map { entity ->
+        // A. Convert Entity Database ke Model UI (Pegang SEMUA data dulu)
+        val allUiTransactions = transactions.map { entity ->
             val (iconId, color) = getCategoryStyle(entity.category, entity.isIncome)
             Transaction(
                 id = entity.id,
@@ -44,13 +44,19 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
             )
         }
 
-        // B. Hitung Analytics (Budget, Current Balance, Extra Balance)
-        val analytics = calculateAnalytics(uiTransactions)
+        // B. Hitung Analytics PAKE SEMUA DATA
+        // (Biar matematika Current & Extra Balance tetep akurat)
+        val analytics = calculateAnalytics(allUiTransactions)
 
-        // C. Return State Baru ke UI
+        // C. KUNCI FIX-NYA DISINI: Sembunyiin data suntikan dari UI!
+        val cleanTransactions = allUiTransactions.filter {
+            !it.category.startsWith("Injection")
+        }
+
+        // D. Return State Baru ke UI
         DashboardState(
             isLoading = false,
-            recentTransactions = uiTransactions,
+            recentTransactions = cleanTransactions, // <-- Kirim data yang udah bersih
             dailyBudgetLeft = analytics.dailyLeft,
             dailyUsagePercent = analytics.dailyUsagePercent,
             currentBalance = analytics.currentBalance,
@@ -325,10 +331,11 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         val targetMonth = selectedDate.get(Calendar.MONTH)
         val targetYear = selectedDate.get(Calendar.YEAR)
 
-        // 1. Filter Transaksi Bulan Ini
+        // 1. Filter Transaksi Bulan Ini (Plus blokir Injection)
         val monthlyTx = allTransactions.filter {
             val c = Calendar.getInstance().apply { timeInMillis = it.date }
-            c.get(Calendar.MONTH) == targetMonth && c.get(Calendar.YEAR) == targetYear
+            c.get(Calendar.MONTH) == targetMonth && c.get(Calendar.YEAR) == targetYear &&
+                    !it.category.startsWith("Injection") // <-- Tambahan proteksi
         }
 
         // 2. Hitung Total Global
