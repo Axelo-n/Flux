@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -65,10 +66,13 @@ class FluxNotificationListenerService : NotificationListenerService() {
         startForeground(1999, notification)
     }
 
-    // Matiin tameng kalo service putus/dimatiin manual
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         stopForeground(STOP_FOREGROUND_REMOVE)
+        // Minta sistem untuk reconnect listener secepatnya (API 24+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            requestRebind(ComponentName(this, FluxNotificationListenerService::class.java))
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {

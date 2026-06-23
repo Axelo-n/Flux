@@ -6,7 +6,9 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,11 +71,21 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
     }
     var isServiceActive by remember { mutableStateOf(checkNotificationServiceAccess()) }
 
+    // 3. Logic Cek Battery Optimization (true = exempted = bagus)
+    fun checkBatteryOptimizationExempt(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            pm.isIgnoringBatteryOptimizations(context.packageName)
+        } else true
+    }
+    var isBatteryExempt by remember { mutableStateOf(checkBatteryOptimizationExempt()) }
+
     // Auto-refresh status pas balik ke aplikasi
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 isServiceActive = checkNotificationServiceAccess()
+                isBatteryExempt = checkBatteryOptimizationExempt()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -134,11 +146,20 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
     // --- PANGGIL UI CONTENT ---
     SettingsScreenContent(
         isServiceActive = isServiceActive,
+        isBatteryExempt = isBatteryExempt,
         parserRules = rules,
         // Actions
         onToggleService = {
             val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
             context.startActivity(intent)
+        },
+        onFixBatteryOptimization = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                }
+                context.startActivity(intent)
+            }
         },
         onTestNotification = {
             if (Build.VERSION.SDK_INT >= 33) {
@@ -172,8 +193,10 @@ fun SettingsScreen(viewModel: DashboardViewModel) {
 @Composable
 fun SettingsScreenContent(
     isServiceActive: Boolean,
+    isBatteryExempt: Boolean = true,
     parserRules: List<ParserRule> = emptyList(),
     onToggleService: () -> Unit,
+    onFixBatteryOptimization: () -> Unit = {},
     onTestNotification: () -> Unit,
     onInjectCurrentBalance: (Double) -> Unit,
     onInjectExtraBalance: (Double) -> Unit,
@@ -240,6 +263,47 @@ fun SettingsScreenContent(
                         uncheckedThumbColor = UIGray, uncheckedTrackColor = UIBlack
                     )
                 )
+            }
+        }
+
+        // Battery Optimization Card
+        FluxCard(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .then(if (!isBatteryExempt) Modifier.clickable { onFixBatteryOptimization() } else Modifier)
+                    .padding(20.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier.size(44.dp).clip(CircleShape)
+                            .background(if (isBatteryExempt) UITeal.copy(0.2f) else CatOrange.copy(0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.flux_transparent),
+                            contentDescription = null,
+                            tint = if (isBatteryExempt) UITeal else CatOrange,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text("Battery Optimization", style = AppFont.Bold.copy(color = UIWhite, fontSize = 16.sp))
+                        Text(
+                            if (isBatteryExempt) "Disabled — listener runs freely" else "Enabled — tap to fix!",
+                            style = AppFont.Medium.copy(
+                                color = if (isBatteryExempt) UITeal else CatOrange,
+                                fontSize = 12.sp
+                            )
+                        )
+                    }
+                }
+                if (!isBatteryExempt) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = CatOrange)
+                }
             }
         }
 
