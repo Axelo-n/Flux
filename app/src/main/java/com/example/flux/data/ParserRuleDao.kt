@@ -1,21 +1,11 @@
-package com.example.flux
+package com.example.flux.data
 
 import androidx.room.Dao
 import androidx.room.Delete
-import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
-import androidx.room.PrimaryKey
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
-
-@Entity(tableName = "parser_rules")
-data class ParserRule(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val keyword: String,
-    val targetCategory: String,
-    val targetNote: String? = null
-)
 
 @Dao
 interface ParserRuleDao {
@@ -31,7 +21,6 @@ interface ParserRuleDao {
     @Delete
     suspend fun delete(rule: ParserRule)
 
-    // BUAT RESTORE
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(rules: List<ParserRule>)
 

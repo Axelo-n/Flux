@@ -1,4 +1,4 @@
-package com.example.flux
+package com.example.flux.notification
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -12,13 +12,18 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.graphics.toColorInt
+import com.example.flux.MainActivity
+import com.example.flux.R
+import com.example.flux.data.TransactionDatabase
+import com.example.flux.data.TransactionEntity
+import com.example.flux.data.TransactionRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
-import androidx.core.graphics.toColorInt
 
 class FluxNotificationListenerService : NotificationListenerService() {
 
@@ -28,48 +33,17 @@ class FluxNotificationListenerService : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
         val database = TransactionDatabase.getDatabase(applicationContext)
-        repository = TransactionRepository(database.transactionDao(), parserRuleDao = database.parserRuleDao())
+        repository = TransactionRepository(database.transactionDao(), database.parserRuleDao())
     }
 
-    // --- 1. SUNTIKAN TAMENG FOREGROUND SERVICE ---
     override fun onListenerConnected() {
         super.onListenerConnected()
-        // Langsung nyalain tameng pas service berhasil konek ke sistem
-        startMyForegroundService()
-    }
-
-    private fun startMyForegroundService() {
-        val channelId = "flux_persistent_channel"
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // Bikin Channel (Wajib buat Android 8+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Flux Background Service",
-                NotificationManager.IMPORTANCE_MIN // Pake MIN biar ga bunyi/getar, nyelip anteng di bawah
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        // Desain Notifikasi "Tameng"
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Flux Auto-Record is Active")
-            .setContentText("Listening to bank notifications...")
-            .setSmallIcon(R.drawable.flux_transparent) // Pastiin icon ini bener ada
-            .setColor("#0B0E14".toColorInt())
-            .setOngoing(true) // INI KUNCINYA: Ga bisa di-swipe sama user/sistem
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .build()
-
-        // Eksekusi jadi Foreground (ID 1999 bebas)
-        startForeground(1999, notification)
+        startPersistentNotification()
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         stopForeground(STOP_FOREGROUND_REMOVE)
-        // Minta sistem untuk reconnect listener secepatnya (API 24+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             requestRebind(ComponentName(this, FluxNotificationListenerService::class.java))
         }
@@ -77,44 +51,57 @@ class FluxNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
-
         if (sbn == null) return
 
-        // 1. INITIALIZE FILTER
         val packageName = sbn.packageName
-
         val extras = sbn.notification.extras
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getString(Notification.EXTRA_TEXT) ?: ""
 
-        // Prevent loop dari debug
         if (title.contains("Flux Recorded This")) return
 
-        // --- FILTERING ---
         val allowedApps = listOf("com.bcadigital.blu", "com.example.flux")
         if (packageName !in allowedApps) return
 
-        // 3. PARSING
         serviceScope.launch {
-            // A. Initialize Rules
             val customRules = repository.getRulesSync()
-
-            // B. Give Rules to Parser
             val transaction = NotificationTransactionParser.parse(title, text, customRules)
 
-            // C. Save if Valid
             if (transaction != null) {
-                val newTx = TransactionEntity(
-                    amount = transaction.amount,
-                    note = transaction.note,
-                    category = transaction.category,
-                    isIncome = transaction.isIncome,
-                    date = System.currentTimeMillis()
+                repository.insert(
+                    TransactionEntity(
+                        amount = transaction.amount,
+                        note = transaction.note,
+                        category = transaction.category,
+                        isIncome = transaction.isIncome,
+                        date = System.currentTimeMillis()
+                    )
                 )
-                repository.insert(newTx)
                 sendSuccessNotification(transaction)
             }
         }
+    }
+
+    private fun startPersistentNotification() {
+        val channelId = "flux_persistent_channel"
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notificationManager.createNotificationChannel(
+                NotificationChannel(channelId, "Flux Background Service", NotificationManager.IMPORTANCE_MIN)
+            )
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Flux Auto-Record is Active")
+            .setContentText("Listening to bank notifications...")
+            .setSmallIcon(R.drawable.flux_transparent)
+            .setColor("#0B0E14".toColorInt())
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .build()
+
+        startForeground(1999, notification)
     }
 
     private fun sendSuccessNotification(tx: ParsedTransaction) {
@@ -122,42 +109,32 @@ class FluxNotificationListenerService : NotificationListenerService() {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Flux Updates",
-                NotificationManager.IMPORTANCE_DEFAULT
+            notificationManager.createNotificationChannel(
+                NotificationChannel(channelId, "Flux Updates", NotificationManager.IMPORTANCE_DEFAULT)
             )
-            notificationManager.createNotificationChannel(channel)
         }
 
-        val format = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
-        format.maximumFractionDigits = 0
+        val format = NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
+            maximumFractionDigits = 0
+        }
         val amountString = format.format(tx.amount).replace("Rp", "Rp ")
-
-        val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            this, 0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-
-        val contentText = "$amountString (${tx.category})"
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.flux_transparent)
             .setColor("#0B0E14".toColorInt())
             .setContentTitle("Flux Recorded This! ✅")
-            .setContentText(contentText)
+            .setContentText("$amountString (${tx.category})")
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setGroup("FLUX_TRANSACTIONS") // <--- TAMBAHAN 1: Pisahin grup biar ga numpuk
+            .setGroup("FLUX_TRANSACTIONS")
             .build()
 
-        // <--- TAMBAHAN 2: Bikin ID yang aman dari Integer Overflow dan ga nabrak ID tameng
         val safeNotifId = (System.currentTimeMillis() % 100000).toInt() + 2000
-
         notificationManager.notify(safeNotifId, notification)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
     }
 }

@@ -1,4 +1,4 @@
-package com.example.flux
+package com.example.flux.data
 
 import android.content.Context
 import androidx.room.Database
@@ -22,9 +22,9 @@ abstract class TransactionDatabase : RoomDatabase() {
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `parser_rules` (
-                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
-                        `keyword` TEXT NOT NULL, 
-                        `targetCategory` TEXT NOT NULL, 
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `keyword` TEXT NOT NULL,
+                        `targetCategory` TEXT NOT NULL,
                         `targetNote` TEXT
                     )
                     """.trimIndent()
@@ -34,15 +34,14 @@ abstract class TransactionDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): TransactionDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
+                Room.databaseBuilder(
                     context.applicationContext,
                     TransactionDatabase::class.java,
                     "flux_database"
                 )
                 .addMigrations(MIGRATION_1_2)
                 .build()
-                INSTANCE = instance
-                instance
+                .also { INSTANCE = it }
             }
         }
     }
