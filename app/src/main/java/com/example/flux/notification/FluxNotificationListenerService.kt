@@ -1,140 +1,88 @@
 package com.example.flux.notification
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
+import android.app.*
+import android.content.*
 import android.os.Build
-import android.service.notification.NotificationListenerService
-import android.service.notification.StatusBarNotification
+import android.service.notification.*
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.graphics.toColorInt
+import com.example.flux.preferences.AppPreferences
+import com.example.flux.preferences.translate
 import com.example.flux.MainActivity
 import com.example.flux.R
-import com.example.flux.data.TransactionDatabase
-import com.example.flux.data.TransactionEntity
-import com.example.flux.data.TransactionRepository
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import java.text.NumberFormat
-import java.util.Locale
+import com.example.flux.data.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.security.MessageDigest
+
+data class ListenerHealth(val connected: Boolean = false, val lastConnected: Long = 0, val lastEvent: Long = 0, val error: String? = null)
 
 class FluxNotificationListenerService : NotificationListenerService() {
-
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private lateinit var repository: TransactionRepository
-
-    override fun onCreate() {
-        super.onCreate()
-        val database = TransactionDatabase.getDatabase(applicationContext)
-        repository = TransactionRepository(database.transactionDao(), database.parserRuleDao())
-    }
-
-    override fun onListenerConnected() {
-        super.onListenerConnected()
-        startPersistentNotification()
-    }
-
-    override fun onListenerDisconnected() {
-        super.onListenerDisconnected()
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            requestRebind(ComponentName(this, FluxNotificationListenerService::class.java))
-        }
-    }
-
-    override fun onNotificationPosted(sbn: StatusBarNotification?) {
-        super.onNotificationPosted(sbn)
-        if (sbn == null) return
-
-        val packageName = sbn.packageName
-        val extras = sbn.notification.extras
-        val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
-        val text = extras.getString(Notification.EXTRA_TEXT) ?: ""
-
-        if (title.contains("Flux Recorded This")) return
-
-        val allowedApps = listOf("com.bcadigital.blu", "com.example.flux")
-        if (packageName !in allowedApps) return
-
-        serviceScope.launch {
-            val customRules = repository.getRulesSync()
-            val transaction = NotificationTransactionParser.parse(title, text, customRules)
-
-            if (transaction != null) {
-                repository.insert(
-                    TransactionEntity(
-                        amount = transaction.amount,
-                        note = transaction.note,
-                        category = transaction.category,
-                        isIncome = transaction.isIncome,
-                        date = System.currentTimeMillis()
-                    )
-                )
-                sendSuccessNotification(transaction)
+    companion object {
+        private val state = MutableStateFlow(ListenerHealth())
+        val health = state.asStateFlow()
+        fun reconnect(context: Context) {
+            runCatching { requestRebind(ComponentName(context, FluxNotificationListenerService::class.java)) }.onFailure {
+                state.value = state.value.copy(connected = false, error = "Belum bisa terhubung. Periksa akses notifikasi di Android.")
             }
         }
     }
-
-    private fun startPersistentNotification() {
-        val channelId = "flux_persistent_channel"
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notificationManager.createNotificationChannel(
-                NotificationChannel(channelId, "Flux Background Service", NotificationManager.IMPORTANCE_MIN)
-            )
-        }
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Flux Auto-Record is Active")
-            .setContentText("Listening to bank notifications...")
-            .setSmallIcon(R.drawable.flux_transparent)
-            .setColor("#0B0E14".toColorInt())
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .build()
-
-        startForeground(1999, notification)
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private lateinit var repository: TransactionRepository
+    override fun onCreate() {
+        super.onCreate()
+        AppPreferences.initialize(this)
+        repository = TransactionRepository(TransactionDatabase.getDatabase(applicationContext))
     }
-
-    private fun sendSuccessNotification(tx: ParsedTransaction) {
-        val channelId = "flux_success_channel"
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notificationManager.createNotificationChannel(
-                NotificationChannel(channelId, "Flux Updates", NotificationManager.IMPORTANCE_DEFAULT)
-            )
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        state.value = state.value.copy(connected = true, lastConnected = System.currentTimeMillis(), error = null)
+        try { foreground() } catch (e: Exception) {
+            Log.w("FluxListener", "Foreground unavailable", e)
+            state.value = state.value.copy(error = "Notifikasi layanan belum aktif. Periksa izin notifikasi.")
         }
-
-        val format = NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
-            maximumFractionDigits = 0
+        try { activeNotifications?.forEach { process(it) } } catch (e: Exception) { Log.w("FluxListener", "Recovery unavailable", e) }
+    }
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        state.value = state.value.copy(connected = false)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        reconnect(this)
+    }
+    override fun onDestroy() {
+        state.value = state.value.copy(connected = false)
+        scope.cancel()
+        super.onDestroy()
+    }
+    override fun onNotificationPosted(sbn: StatusBarNotification?) { sbn?.let { process(it) } }
+    private fun process(sbn: StatusBarNotification) {
+        if (sbn.packageName != "com.bcadigital.blu") return
+        if (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        val extras = sbn.notification.extras
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
+        if (title.isBlank() && text.isBlank()) return
+        state.value = state.value.copy(lastEvent = System.currentTimeMillis())
+        scope.launch {
+            try {
+                val fingerprint = hash("${sbn.key}|$title|$text")
+                val occurrence = hash("${sbn.key}|${sbn.postTime}")
+                val eventId = hash("$occurrence|$fingerprint")
+                val recorded = repository.recordNotificationDetail(NotificationRecord(eventId, fingerprint, sbn.postTime, title, text, "", "", occurrence))
+                if (recorded != null) runCatching { RecordingNotifications.post(this@FluxNotificationListenerService, eventId, recorded) }.onFailure { Log.w("FluxListener", "Confirmation notification unavailable", it) }
+            } catch (e: Exception) {
+                Log.e("FluxListener", "Recording failed", e)
+                state.value = state.value.copy(error = "Pencatatan gagal. Periksa riwayat dan koreksi manual.")
+            }
         }
-        val amountString = format.format(tx.amount).replace("Rp", "Rp ")
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.flux_transparent)
-            .setColor("#0B0E14".toColorInt())
-            .setContentTitle("Flux Recorded This! ✅")
-            .setContentText("$amountString (${tx.category})")
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setGroup("FLUX_TRANSACTIONS")
-            .build()
-
-        val safeNotifId = (System.currentTimeMillis() % 100000).toInt() + 2000
-        notificationManager.notify(safeNotifId, notification)
+    }
+    private fun hash(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun foreground() {
+        val channel = "flux_persistent_channel"
+        val manager = getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(channel, translate("Pencatatan otomatis"), NotificationManager.IMPORTANCE_LOW))
+        val intent = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        startForeground(1999, NotificationCompat.Builder(this, channel).setSmallIcon(R.drawable.ic_wallet_outline).setContentTitle(translate("Flux · blu terhubung")).setContentText(translate("Pencatatan otomatis siap. Ketuk untuk melihat keuangan.")).setContentIntent(intent).setOngoing(true).setSilent(true).build())
     }
 }

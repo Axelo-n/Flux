@@ -17,15 +17,24 @@ import com.example.flux.ui.DashboardScreen
 import com.example.flux.ui.theme.FluxTheme
 import com.example.flux.viewmodel.DashboardViewModel
 import com.example.flux.viewmodel.DashboardViewModelFactory
+import androidx.core.app.NotificationManagerCompat
+import com.example.flux.notification.FluxNotificationListenerService
 
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        if (packageName in NotificationManagerCompat.getEnabledListenerPackages(this) && !FluxNotificationListenerService.health.value.connected) {
+            FluxNotificationListenerService.reconnect(this)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.flux.preferences.AppPreferences.initialize(this)
         enableEdgeToEdge()
 
         val database = TransactionDatabase.getDatabase(this)
-        val repository = TransactionRepository(database.transactionDao(), database.parserRuleDao())
+        val repository = TransactionRepository(database)
         val viewModelFactory = DashboardViewModelFactory(repository)
 
         setContent {

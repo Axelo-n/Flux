@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.flux"
         minSdk = 24
         targetSdk = 36
-        versionCode = 10
-        versionName = "3.0"
+        versionCode = 12
+        versionName = "5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -37,9 +37,11 @@ android {
     buildFeatures {
         compose = true
     }
+    compileOptions.isCoreLibraryDesugaringEnabled = true
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

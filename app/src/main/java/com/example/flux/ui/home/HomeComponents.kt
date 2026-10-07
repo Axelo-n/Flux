@@ -1,5 +1,7 @@
 package com.example.flux.ui.home
 
+import com.example.flux.preferences.translate
+
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -90,7 +92,7 @@ fun HeaderSection(isActive: Boolean) {
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (isActive) "Listening" else "Paused",
+                text = translate(if (isActive) "Listening" else "Paused"),
                 style = AppFont.Bold.copy(fontSize = 16.sp, color = if (isActive) UITeal else UIGray)
             )
         }
@@ -105,8 +107,8 @@ fun BudgetGridSection(dailyLeft: String, dailyUsagePercent: Float) {
     ) {
         FluxCard(modifier = Modifier.width(200.dp).height(100.dp)) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text("Daily Budget", style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = 3.dp))
-                Text(dailyLeft, style = AppFont.Bold.copy(color = UIWhite, fontSize = 32.sp), modifier = Modifier.offset(y = (-3).dp))
+                Text(translate("Daily Budget"), style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = 3.dp))
+                Text(translate(dailyLeft), style = AppFont.Bold.copy(color = UIWhite, fontSize = 32.sp), modifier = Modifier.offset(y = (-3).dp))
             }
         }
 
@@ -115,7 +117,7 @@ fun BudgetGridSection(dailyLeft: String, dailyUsagePercent: Float) {
                 modifier = Modifier.fillMaxSize().padding(16.dp),
                 verticalArrangement = Arrangement.Center
             ) {
-                Text("Daily Usage", style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp))
+                Text(translate("Daily Usage"), style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp))
                 Spacer(modifier = Modifier.height(4.dp))
                 Box(modifier = Modifier.fillMaxWidth().height(32.dp)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -141,14 +143,14 @@ fun BalanceRowSection(currentBalance: String, extraBalance: String, isPositive: 
     ) {
         FluxCard(modifier = Modifier.weight(1f).height(80.dp)) {
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                Text("Current Balance", style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = 3.dp))
-                Text(currentBalance, style = AppFont.Bold.copy(color = UIWhite, fontSize = 20.sp), modifier = Modifier.offset(y = (-3).dp))
+                Text(translate("Current Balance"), style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = 3.dp))
+                Text(translate(currentBalance), style = AppFont.Bold.copy(color = UIWhite, fontSize = 20.sp), modifier = Modifier.offset(y = (-3).dp))
             }
         }
         FluxCard(modifier = Modifier.weight(1f).height(80.dp)) {
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                Text("Extra Balance", style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = 3.dp))
-                Text(extraBalance, style = AppFont.Bold.copy(color = if (isPositive) UIGreen else UIRed, fontSize = 20.sp), modifier = Modifier.offset(y = (-3).dp))
+                Text(translate("Extra Balance"), style = AppFont.SemiBold.copy(color = UIGray, fontSize = 16.sp), modifier = Modifier.offset(y = 3.dp))
+                Text(translate(extraBalance), style = AppFont.Bold.copy(color = if (isPositive) UIGreen else UIRed, fontSize = 20.sp), modifier = Modifier.offset(y = (-3).dp))
             }
         }
     }
@@ -169,7 +171,7 @@ fun SpendingGraphSection(dataPoints: List<DayData>) {
                 ) {
                     val step = yAxisMax / 4
                     listOf(yAxisMax, yAxisMax - step, yAxisMax - step * 2, yAxisMax - step * 3, 0f).forEach { value ->
-                        Text("${(value / 1000).toInt()}k", style = AppFont.SemiBold.copy(color = UIWhite, fontSize = 12.sp))
+                        Text(translate("${(value / 1000).toInt()}k"), style = AppFont.SemiBold.copy(color = UIWhite, fontSize = 12.sp))
                     }
                 }
 
@@ -219,7 +221,7 @@ fun SpendingGraphSection(dataPoints: List<DayData>) {
 
                     Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         dataPoints.forEach {
-                            Text(text = it.day, style = AppFont.SemiBold.copy(color = UIGray, fontSize = 12.sp), textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                            Text(text = translate(it.day), style = AppFont.SemiBold.copy(color = UIGray, fontSize = 12.sp), textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -241,11 +243,11 @@ fun RecentTransactionsCard(transactions: List<Transaction>) {
 
     FluxCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text("Transactions Today", style = AppFont.Bold.copy(color = UIWhite, fontSize = 16.sp))
+            Text(translate("Transactions Today"), style = AppFont.Bold.copy(color = UIWhite, fontSize = 16.sp))
             Spacer(modifier = Modifier.height(10.dp))
 
             if (todaysTransactions.isEmpty()) {
-                Text("No transactions today", style = AppFont.Regular.copy(color = UIGray, fontSize = 14.sp), modifier = Modifier.padding(vertical = 20.dp))
+                Text(translate("No transactions today"), style = AppFont.Regular.copy(color = UIGray, fontSize = 14.sp), modifier = Modifier.padding(vertical = 20.dp))
             } else {
                 todaysTransactions.forEachIndexed { index, transaction ->
                     TransactionItem(data = transaction)
@@ -278,6 +280,6 @@ fun BottomSpacer() {
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Text("You are up to date", style = AppFont.Medium.copy(fontSize = 12.sp, color = UIGray.copy(alpha = 0.3f)))
+        Text(translate("You are up to date"), style = AppFont.Medium.copy(fontSize = 12.sp, color = UIGray.copy(alpha = 0.3f)))
     }
 }

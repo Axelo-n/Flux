@@ -1,328 +1,120 @@
 package com.example.flux.viewmodel
 
 import androidx.compose.ui.graphics.Color
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.*
 import com.example.flux.R
-import com.example.flux.data.FluxBackupData
-import com.example.flux.data.TransactionEntity
-import com.example.flux.data.TransactionRepository
-import com.example.flux.model.AnalyticsState
-import com.example.flux.model.CategoryStat
-import com.example.flux.model.DashboardState
-import com.example.flux.model.DayData
-import com.example.flux.model.MonthlyAnalyticsState
-import com.example.flux.model.Transaction
-import com.example.flux.ui.theme.CatBlue
-import com.example.flux.ui.theme.CatGreen
-import com.example.flux.ui.theme.CatGrey
-import com.example.flux.ui.theme.CatOrange
-import com.example.flux.ui.theme.CatPurple
-import com.example.flux.ui.theme.CatYellow
-import com.example.flux.ui.theme.UIBlue
-import com.example.flux.ui.theme.UITeal
+import com.example.flux.data.*
+import com.example.flux.model.*
+import com.example.flux.ui.theme.*
 import com.google.gson.Gson
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
+import java.time.*
 import java.util.Calendar
 import java.util.Locale
 
+fun rupiah(amount: Long): String = NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply { maximumFractionDigits = 0 }.format(amount).replace("Rp", "Rp ")
+
 class DashboardViewModel(private val repository: TransactionRepository) : ViewModel() {
-
-    val uiState: StateFlow<DashboardState> = combine(
-        repository.allTransactions,
-        repository.totalIncome,
-        repository.totalExpense
-    ) { transactions, _, _ ->
-        val allUiTransactions = transactions.map { entity ->
-            val (iconId, color) = getCategoryStyle(entity.category, entity.isIncome)
-            Transaction(
-                id = entity.id,
-                title = entity.note.ifEmpty { entity.category },
-                category = entity.category,
-                amount = entity.amount,
-                formattedAmount = formatRupiah(entity.amount),
-                iconRes = iconId,
-                iconBgColor = color,
-                isIncome = entity.isIncome,
-                date = entity.date
-            )
+    val config = repository.config.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val policies = repository.policies.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val adjustments = repository.adjustments.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val parserRules = repository.allRules.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val notifications = repository.notifications.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    private val clock = flow { while (true) { emit(System.currentTimeMillis()); delay(15_000) } }
+    private data class Inputs(val rows: List<TransactionEntity>, val config: FinanceConfig?, val policies: List<BudgetPolicy>, val adjustments: List<BalanceAdjustment>)
+    private val inputs = combine(repository.allTransactions, repository.config, repository.policies, repository.adjustments) { t, c, p, a -> Inputs(t, c, p, a) }
+    val uiState = combine(inputs, clock) { input, now ->
+        val today = BudgetEngine.day(now, input.config?.timezone ?: "Asia/Jakarta")
+        val totals = BudgetEngine.calculate(input.config, input.policies, input.rows, input.adjustments, today)
+        val transactions = if (input.config == null) emptyList() else input.rows.filter { !it.category.startsWith("Injection") }.map { entity ->
+            val (icon, color) = style(entity.category, entity.isIncome)
+            val effective = entity.amount - entity.refund
+            Transaction(entity.id, entity.note.ifBlank { entity.category }, entity.category, effective, rupiah(effective.toLong()), icon, color, entity.isIncome, entity.date, entity.amount, entity.note, entity.refund, entity.refundNote, entity.source)
         }
+        DashboardState(false, transactions, rupiah(totals.balance), rupiah(totals.extra), totals.extra >= 0, rupiah(totals.remaining), if (totals.budget > 0) (totals.spent.toFloat() / totals.budget).coerceIn(0f, 1f) else if (totals.spent > 0) 1f else 0f, totals.graph, totals, input.config != null)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, DashboardState())
 
-        val analytics = calculateAnalytics(allUiTransactions)
-        val cleanTransactions = allUiTransactions.filter { !it.category.startsWith("Injection") }
-
-        DashboardState(
-            isLoading = false,
-            recentTransactions = cleanTransactions,
-            dailyBudgetLeft = analytics.dailyLeft,
-            dailyUsagePercent = analytics.dailyUsagePercent,
-            currentBalance = analytics.currentBalance,
-            extraBalance = analytics.extraBalance,
-            isExtraBalancePositive = analytics.isExtraPositive,
-            graphData = analytics.graphData
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = DashboardState()
-    )
-
-    // --- CRUD ---
-
-    fun addTransaction(amount: Double, note: String, category: String, isIncome: Boolean) {
+    private val _message = MutableStateFlow<String?>(null)
+    val message = _message.asStateFlow()
+    private val _busy = MutableStateFlow(false)
+    val busy = _busy.asStateFlow()
+    fun clearMessage() { _message.value = null }
+    private fun perform(success: String? = null, done: () -> Unit = {}, action: suspend () -> Unit) {
+        if (_busy.value) return
+        _busy.value = true
         viewModelScope.launch {
-            repository.insert(TransactionEntity(amount = amount, note = note, category = category, isIncome = isIncome, date = System.currentTimeMillis()))
+            try { action(); _message.value = success; done() }
+            catch (e: Exception) { _message.value = e.message ?: "Tidak berhasil menyimpan. Coba lagi." }
+            finally { _busy.value = false }
         }
     }
-
-    fun updateTransaction(id: Int, amount: Double, note: String, category: String, isIncome: Boolean, date: Long) {
-        viewModelScope.launch {
-            repository.insert(TransactionEntity(id = id, amount = amount, note = note, category = category, isIncome = isIncome, date = date))
-        }
+    fun startSystem(balance: Long, timezone: String, amounts: List<Long>, done: () -> Unit = {}) = perform("Sistem baru siap", done) {
+        val today = LocalDate.now(ZoneId.of(timezone)).toEpochDay()
+        repository.start(FinanceConfig(startDay = today, timezone = timezone, openingBalance = balance), BudgetPolicy(today, amounts.joinToString(",")))
     }
-
-    fun deleteTransaction(id: Int) {
-        viewModelScope.launch { repository.delete(id) }
+    fun saveBudget(date: LocalDate, amounts: List<Long>, done: () -> Unit) = perform("Budget baru dijadwalkan", done) { repository.addPolicy(BudgetPolicy(date.toEpochDay(), amounts.joinToString(","))) }
+    fun cancelBudget(day: Long) = perform("Jadwal budget dibatalkan") { repository.deleteFuturePolicy(day) }
+    fun saveTransaction(id: Int = 0, amount: Double, note: String, category: String, income: Boolean, date: Long, refund: Double = 0.0, refundNote: String = "", source: String = "manual", done: () -> Unit) = perform("Transaksi tersimpan", done) {
+        repository.insert(TransactionEntity(id, amount, note.trim(), category, income, date, refund, refundNote.trim(), source))
     }
-
-    fun getTransactionById(id: Int): Transaction? = uiState.value.recentTransactions.find { it.id == id }
-
-    // --- PARSER RULES ---
-
-    val parserRules = repository.allRules.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    fun addParserRule(keyword: String, category: String, note: String?) {
-        viewModelScope.launch {
-            repository.insertRule(com.example.flux.data.ParserRule(keyword = keyword, targetCategory = category, targetNote = note))
-        }
-    }
-
-    fun deleteParserRule(rule: com.example.flux.data.ParserRule) {
-        viewModelScope.launch { repository.deleteRule(rule) }
-    }
-
-    // --- BALANCE INJECTION ---
-
-    fun injectCurrentBalance(amount: Double) {
-        viewModelScope.launch {
-            repository.insert(TransactionEntity(amount = amount, note = "Manual Injection (Current)", category = "Injection_Current", isIncome = true, date = System.currentTimeMillis()))
-        }
-    }
-
-    fun injectExtraBalance(amount: Double) {
-        viewModelScope.launch {
-            repository.insert(TransactionEntity(amount = amount, note = "Manual Injection (Extra)", category = "Injection_Extra", isIncome = true, date = System.currentTimeMillis()))
-        }
-    }
-
-    // --- BACKUP / RESTORE ---
-
-    suspend fun createBackupJson(): String {
-        val transactions = repository.getAllTransactionsSync()
-        val rules = repository.getRulesSync()
-        return Gson().toJson(FluxBackupData(transactions, rules))
-    }
-
+    fun deleteTransaction(id: Int, done: () -> Unit = {}) = perform("Transaksi dihapus", done) { repository.delete(id) }
+    fun getTransactionById(id: Int) = uiState.value.recentTransactions.find { it.id == id }
+    fun saveRule(rule: ParserRule, done: () -> Unit = {}) = perform("Aturan tersimpan", done) { if (rule.id == 0) repository.insertRule(rule) else repository.updateRule(rule) }
+    fun deleteParserRule(rule: ParserRule) = perform("Aturan dihapus") { repository.deleteRule(rule) }
+    fun adjust(target: String, amount: Long, note: String, done: () -> Unit) = perform("Koreksi tersimpan", done) { repository.addAdjustment(BalanceAdjustment(target = target, amount = amount, note = note.trim())) }
+    fun deleteAdjustment(row: BalanceAdjustment) = perform("Koreksi dihapus") { repository.deleteAdjustment(row) }
+    suspend fun createBackupJson(): String = Gson().toJson(repository.backup())
     fun restoreFromBackup(jsonString: String, onSuccess: () -> Unit, onError: () -> Unit) {
+        if (_busy.value) return
+        _busy.value = true
         viewModelScope.launch {
             try {
-                val backupData = Gson().fromJson(jsonString, FluxBackupData::class.java)
-                repository.restoreData(backupData)
-                onSuccess()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                onError()
-            }
+                // Check version explicitly; Gson does not invoke Kotlin defaults on old JSON.
+                val tree = com.google.gson.JsonParser.parseString(jsonString).asJsonObject
+                require(tree.get("version")?.asInt == 2)
+                repository.restoreData(Gson().fromJson(tree, FluxBackupData::class.java)); onSuccess()
+            } catch (e: Exception) { _message.value = "Backup tidak valid; data saat ini tetap aman."; onError() }
+            finally { _busy.value = false }
         }
     }
-
-    // --- ANALYTICS ---
-
     private val _analyticsDate = MutableStateFlow(Calendar.getInstance())
     val analyticsDate = _analyticsDate.asStateFlow()
-
-    fun nextMonth() {
-        _analyticsDate.update { (it.clone() as Calendar).apply { add(Calendar.MONTH, 1) } }
-    }
-
-    fun prevMonth() {
-        _analyticsDate.update { (it.clone() as Calendar).apply { add(Calendar.MONTH, -1) } }
-    }
-
+    fun nextMonth() { _analyticsDate.update { (it.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, 1); add(Calendar.MONTH, 1) } } }
+    fun prevMonth() { _analyticsDate.update { (it.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, 1); add(Calendar.MONTH, -1) } } }
     fun getMonthlyAnalytics(selectedDate: Calendar, allTransactions: List<Transaction>): MonthlyAnalyticsState {
-        val targetMonth = selectedDate.get(Calendar.MONTH)
-        val targetYear = selectedDate.get(Calendar.YEAR)
-
-        val monthlyTx = allTransactions.filter {
-            val c = Calendar.getInstance().apply { timeInMillis = it.date }
-            c.get(Calendar.MONTH) == targetMonth &&
-                c.get(Calendar.YEAR) == targetYear &&
-                !it.category.startsWith("Injection")
+        val zone = config.value?.timezone ?: "Asia/Jakarta"
+        val month = YearMonth.of(selectedDate.get(Calendar.YEAR), selectedDate.get(Calendar.MONTH) + 1)
+        val rows = allTransactions.filter { YearMonth.from(BudgetEngine.day(it.date, zone)) == month }
+        val expense = rows.filter { !it.isIncome }.sumOf { it.amount }
+        val stats = rows.filter { !it.isIncome && it.amount > 0 }.groupBy { it.category }.map { (cat, tx) ->
+            val total = tx.sumOf { it.amount }; val (icon, color) = style(cat, false)
+            CategoryStat(cat, total, if (expense > 0) (total / expense).toFloat() else 0f, color, icon)
+        }.sortedByDescending { it.total }
+        val graph = (1..month.lengthOfMonth()).map { d ->
+            val date = month.atDay(d)
+            val amount = rows.filter { !it.isIncome && BudgetEngine.day(it.date, zone) == date }.sumOf { it.amount }
+            DayData(d.toString(), amount.toFloat(), BudgetEngine.budget(date, policies.value).toFloat())
         }
-
-        val totalExpense = monthlyTx.filter { !it.isIncome }.sumOf { it.amount }
-        val totalIncome = monthlyTx.filter { it.isIncome }.sumOf { it.amount }
-
-        val groupedStats = monthlyTx.filter { !it.isIncome }
-            .groupBy { it.category }
-            .map { (cat, list) ->
-                val catTotal = list.sumOf { it.amount }
-                val percent = if (totalExpense > 0) (catTotal / totalExpense).toFloat() else 0f
-                val (icon, color) = getCategoryStyle(cat, false)
-                CategoryStat(cat, catTotal, percent, color, icon)
-            }
-            .sortedByDescending { it.percentage }
-
-        val maxDays = selectedDate.getActualMaximum(Calendar.DAY_OF_MONTH)
-        val dailyGraphData = (1..maxDays).map { day ->
-            val expenseThatDay = monthlyTx.filter {
-                val c = Calendar.getInstance().apply { timeInMillis = it.date }
-                !it.isIncome && c.get(Calendar.DAY_OF_MONTH) == day
-            }.sumOf { it.amount }
-
-            val checkDate = (selectedDate.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, day) }
-            val limit = if (checkDate.get(Calendar.DAY_OF_WEEK) in listOf(Calendar.SATURDAY, Calendar.SUNDAY)) 60000f else 40000f
-
-            DayData(day = day.toString(), amount = expenseThatDay.toFloat(), limit = limit)
-        }
-
-        return MonthlyAnalyticsState(
-            totalExpense = formatRupiah(totalExpense),
-            totalIncome = formatRupiah(totalIncome),
-            categoryStats = groupedStats,
-            dailyGraphData = dailyGraphData
-        )
+        return MonthlyAnalyticsState(rupiah(expense.toLong()), rupiah(rows.filter { it.isIncome }.sumOf { it.amount }.toLong()), stats, graph)
     }
-
-    fun calculateAnalytics(transactions: List<Transaction>): AnalyticsState {
-        val calendar = Calendar.getInstance()
-        val todayDay = calendar.get(Calendar.DAY_OF_YEAR)
-        val todayYear = calendar.get(Calendar.YEAR)
-
-        if (transactions.isEmpty()) {
-            val emptyGraph = (0..6).map { i ->
-                val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -(6 - i)) }
-                val limit = if (c.get(Calendar.DAY_OF_WEEK) in listOf(Calendar.SATURDAY, Calendar.SUNDAY)) 60000f else 40000f
-                DayData(SimpleDateFormat("EEE", Locale.getDefault()).format(c.time), 0f, limit)
-            }
-            return AnalyticsState("Rp 0", 0f, "Rp 0", "Rp 0", true, emptyGraph)
-        }
-
-        val txByDay = transactions.groupBy {
-            val c = Calendar.getInstance().apply { timeInMillis = it.date }
-            "${c.get(Calendar.DAY_OF_YEAR)}-${c.get(Calendar.YEAR)}"
-        }
-
-        var totalIncomeForCurrent = 0.0
-        var totalExpense = 0.0
-        var extraBalance = 0.0
-
-        val startCal = Calendar.getInstance().apply {
-            timeInMillis = transactions.minOf { it.date }
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }
-        val endCal = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }
-
-        while (startCal <= endCal) {
-            val dKey = "${startCal.get(Calendar.DAY_OF_YEAR)}-${startCal.get(Calendar.YEAR)}"
-            val txList = txByDay[dKey] ?: emptyList()
-            val isToday = (startCal == endCal)
-            val dailyLimit = if (startCal.get(Calendar.DAY_OF_WEEK) in listOf(Calendar.SATURDAY, Calendar.SUNDAY)) 60000.0 else 40000.0
-
-            val incomeForCurrent = txList.filter { it.isIncome && it.category != "Injection_Extra" }.sumOf { it.amount }
-            val incomeForExtra = txList.filter { it.isIncome && it.category != "Injection_Current" }.sumOf { it.amount }
-            val daysExpense = txList.filter { !it.isIncome }.sumOf { it.amount }
-
-            totalIncomeForCurrent += incomeForCurrent
-            totalExpense += daysExpense
-            extraBalance += incomeForExtra
-
-            val dailyLeft = dailyLimit - daysExpense
-            if (isToday) {
-                if (dailyLeft < 0) extraBalance += dailyLeft
-            } else {
-                extraBalance += dailyLeft
-            }
-
-            startCal.add(Calendar.DAY_OF_YEAR, 1)
-        }
-
-        val dayOfWeekToday = calendar.get(Calendar.DAY_OF_WEEK)
-        val limitToday = if (dayOfWeekToday in listOf(Calendar.SATURDAY, Calendar.SUNDAY)) 60000.0 else 40000.0
-        val todayTx = transactions.filter {
-            val c = Calendar.getInstance().apply { timeInMillis = it.date }
-            c.get(Calendar.DAY_OF_YEAR) == todayDay && c.get(Calendar.YEAR) == todayYear
-        }
-        val expenseToday = todayTx.filter { !it.isIncome }.sumOf { it.amount }
-        val dailyLeftToday = limitToday - expenseToday
-        val dailyUsagePercent = (expenseToday / limitToday).toFloat().coerceIn(0f, 1f)
-
-        val graphData = (0..6).map { i ->
-            val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -(6 - i)) }
-            val dKey = "${c.get(Calendar.DAY_OF_YEAR)}-${c.get(Calendar.YEAR)}"
-            val limit = if (c.get(Calendar.DAY_OF_WEEK) in listOf(Calendar.SATURDAY, Calendar.SUNDAY)) 60000f else 40000f
-            val dExpense = (txByDay[dKey] ?: emptyList()).filter { !it.isIncome }.sumOf { it.amount }.toFloat()
-            DayData(SimpleDateFormat("EEE", Locale.getDefault()).format(c.time), dExpense, limit)
-        }
-
-        return AnalyticsState(
-            dailyLeft = formatRupiah(dailyLeftToday),
-            dailyUsagePercent = dailyUsagePercent,
-            currentBalance = formatRupiah(totalIncomeForCurrent - totalExpense),
-            extraBalance = formatRupiah(extraBalance),
-            isExtraPositive = extraBalance >= 0,
-            graphData = graphData
-        )
-    }
-
-    // --- HELPERS ---
-
-    private fun formatRupiah(amount: Double): String {
-        return NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
-            maximumFractionDigits = 0
-        }.format(amount).replace("Rp", "Rp ")
-    }
-
-    private fun getCategoryStyle(category: String, isIncome: Boolean): Pair<Int, Color> {
-        if (isIncome) return Pair(R.drawable.ic_wallet_outline, CatBlue)
-
+    private fun style(category: String, income: Boolean): Pair<Int, Color> {
+        if (income) return R.drawable.ic_wallet_outline to CatBlue
         return when (category) {
-            "Food and Beverages"      -> Pair(R.drawable.ic_food_outline, CatOrange)
-            "Transportation"          -> Pair(R.drawable.ic_car_outline, CatGreen)
-            "Groceries and Shopping"  -> Pair(R.drawable.ic_cart_outline, CatPurple)
-            "Entertainment"           -> Pair(R.drawable.ic_ticket_outline, CatYellow)
-            "Account Transfer"        -> Pair(R.drawable.ic_card_outline, CatBlue)
-            "Other"                   -> Pair(R.drawable.ic_other_outline, CatGrey)
-            "Injection_Current"       -> Pair(R.drawable.ic_wallet_outline, UITeal)
-            "Injection_Extra"         -> Pair(R.drawable.ic_wallet_outline, UIBlue)
-            "DEBUG_LOG"               -> Pair(R.drawable.ic_other_outline, Color.Red)
-            else                      -> Pair(R.drawable.ic_other_outline, CatGrey)
+            "Food and Beverages" -> R.drawable.ic_food_outline to CatOrange
+            "Transportation" -> R.drawable.ic_car_outline to CatGreen
+            "Groceries and Shopping" -> R.drawable.ic_cart_outline to CatPurple
+            "Entertainment" -> R.drawable.ic_ticket_outline to CatYellow
+            "Account Transfer" -> R.drawable.ic_card_outline to CatBlue
+            else -> R.drawable.ic_other_outline to CatGrey
         }
     }
 }
-
 class DashboardViewModelFactory(private val repository: TransactionRepository) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(DashboardViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return DashboardViewModel(repository) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
+        require(modelClass.isAssignableFrom(DashboardViewModel::class.java))
+        @Suppress("UNCHECKED_CAST") return DashboardViewModel(repository) as T
     }
 }

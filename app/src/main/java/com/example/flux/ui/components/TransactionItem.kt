@@ -1,89 +1,37 @@
 package com.example.flux.ui.components
 
+import com.example.flux.preferences.translate
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.flux.model.Transaction
-import com.example.flux.ui.theme.AppFont
-import com.example.flux.ui.theme.UIGray
-import com.example.flux.ui.theme.UIGreen
-import com.example.flux.ui.theme.UIRed
-import com.example.flux.ui.theme.UIWhite
+import com.example.flux.ui.theme.*
 
 @Composable
-fun TransactionItem(
-    data: Transaction,
-    onClick: (() -> Unit)? = null
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(50.dp)
-                .clip(CircleShape)
-                .background(data.iconBgColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(id = data.iconRes),
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(22.dp)
-            )
+fun TransactionItem(data: Transaction, onClick: (() -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable { onClick() } else Modifier).padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(data.iconBgColor.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
+            Icon(painterResource(data.iconRes), null, tint = data.iconBgColor, modifier = Modifier.size(20.dp))
         }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = data.title,
-                style = AppFont.Medium.copy(color = UIWhite, fontSize = 18.sp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.offset(y = 2.dp)
-            )
-            Text(
-                text = data.category,
-                style = AppFont.Regular.copy(color = UIGray, fontSize = 14.sp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.offset(y = (-2).dp)
-            )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(if (data.note.isBlank()) translate(data.title) else data.title, style = AppFont.SemiBold.copy(color = UIWhite, fontSize = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (data.refund > 0) "${translate(if (data.amount == 0.0) "Cancel" else "Refund")} · ${data.refundNote}" else "${translate(data.category)} · ${translate(data.source)}", style = AppFont.Regular.copy(color = UIGray, fontSize = 12.sp), maxLines = if (data.refund > 0) 2 else 1, overflow = TextOverflow.Ellipsis)
         }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Text(
-            text = data.formattedAmount,
-            style = AppFont.Bold.copy(
-                color = if (data.isIncome) UIGreen else UIRed,
-                fontSize = 18.sp
-            )
-        )
+        Column(Modifier.widthIn(max = 150.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(translate(data.formattedAmount), style = AppFont.SemiBold.copy(color = if (data.amount == 0.0) UIGray else if (data.isIncome) UIGreen else UIWhite, fontSize = 16.sp))
+            Text(translate(if (data.amount == 0.0) "Dibatalkan" else if (data.isIncome) "Pemasukan" else "Pengeluaran"), style = AppFont.Regular.copy(color = UIGray, fontSize = 11.sp))
+        }
     }
 }

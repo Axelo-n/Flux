@@ -11,7 +11,12 @@ data class Transaction(
     val iconRes: Int,
     val iconBgColor: Color,
     val isIncome: Boolean,
-    val date: Long
+    val date: Long,
+    val originalAmount: Double = amount,
+    val note: String = "",
+    val refund: Double = 0.0,
+    val refundNote: String = "",
+    val source: String = "manual"
 )
 
 data class DayData(

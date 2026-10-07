@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -12,7 +13,7 @@ interface ParserRuleDao {
     @Query("SELECT * FROM parser_rules ORDER BY id DESC")
     fun getAllRules(): Flow<List<ParserRule>>
 
-    @Query("SELECT * FROM parser_rules")
+    @Query("SELECT * FROM parser_rules ORDER BY id DESC")
     suspend fun getAllRulesSync(): List<ParserRule>
 
     @Insert
@@ -26,4 +27,7 @@ interface ParserRuleDao {
 
     @Query("DELETE FROM parser_rules")
     suspend fun clearAll()
+
+    @Update
+    suspend fun update(rule: ParserRule)
 }

@@ -1,5 +1,7 @@
 package com.example.flux.ui.analytics
 
+import com.example.flux.preferences.translate
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -38,6 +40,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -73,115 +78,68 @@ import com.example.flux.R
 fun AnalyticsScreen(viewModel: DashboardViewModel) {
     val globalState by viewModel.uiState.collectAsState()
     val selectedDate by viewModel.analyticsDate.collectAsState()
+    val policies by viewModel.policies.collectAsState()
+    val config by viewModel.config.collectAsState()
+    val theme = com.example.flux.preferences.AppPreferences.state.value.theme
 
-    val analyticsData = remember(globalState.recentTransactions, selectedDate) {
+    val analyticsData = remember(globalState.recentTransactions, selectedDate, policies, config, theme) {
         viewModel.getMonthlyAnalytics(selectedDate, globalState.recentTransactions)
     }
-    val dateString = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(selectedDate.time)
+    val dateString = SimpleDateFormat("MMMM yyyy", com.example.flux.preferences.AppPreferences.locale).format(selectedDate.time)
+    val today = java.time.LocalDate.now(java.time.ZoneId.of(config?.timezone ?: "Asia/Jakarta"))
+    val currentMonth = selectedDate.get(java.util.Calendar.YEAR) == today.year && selectedDate.get(java.util.Calendar.MONTH) + 1 == today.monthValue
 
     AnalyticsScreenContent(
         analyticsData = analyticsData,
         dateString = dateString,
         onNextMonth = { viewModel.nextMonth() },
-        onPrevMonth = { viewModel.prevMonth() }
+        onPrevMonth = { viewModel.prevMonth() },
+        focusDay = if (currentMonth) today.dayOfMonth else null,
+        monthKey = "${selectedDate.get(java.util.Calendar.YEAR)}-${selectedDate.get(java.util.Calendar.MONTH)}"
     )
 }
 
 @Composable
-fun AnalyticsScreenContent(
-    analyticsData: MonthlyAnalyticsState,
-    dateString: String,
-    onNextMonth: () -> Unit,
-    onPrevMonth: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(UIBlack)
-            .padding(horizontal = 24.dp)
-    ) {
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text("Analytics", style = AppFont.Bold.copy(fontSize = 32.sp, color = UIWhite))
-        Text("Where did your money go?", style = AppFont.Medium.copy(fontSize = 16.sp, color = UIGray))
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onPrevMonth,
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(UIGray.copy(alpha = 0.1f))
-            ) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null, tint = UIWhite)
-            }
-            Text(dateString, style = AppFont.Bold.copy(fontSize = 18.sp, color = UIWhite))
-            IconButton(
-                onClick = onNextMonth,
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(UIGray.copy(alpha = 0.1f))
-            ) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = UIWhite)
+fun AnalyticsScreenContent(analyticsData: MonthlyAnalyticsState, dateString: String, onNextMonth: () -> Unit, onPrevMonth: () -> Unit, focusDay: Int? = null, monthKey: String = dateString) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentPadding = PaddingValues(top = 20.dp, bottom = 112.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item { com.example.flux.ui.components.PageHeader("Analisis", "Kenali ritme dan arah pengeluaran lu.") }
+        item { com.example.flux.ui.components.MonthSelector(dateString, onPrevMonth, onNextMonth) }
+        item {
+            val colors = com.example.flux.ui.theme.cardColors(emphasized = true)
+            com.example.flux.ui.components.Panel(colors = colors) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Box(Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+                        if (analyticsData.categoryStats.isNotEmpty()) DonutChart(analyticsData.categoryStats, Modifier.size(112.dp), thickness = 14.dp)
+                        else Canvas(Modifier.size(112.dp)) { drawCircle(colors.border, style = Stroke(14.dp.toPx())) }
+                        Icon(painterResource(R.drawable.ic_chart_outline), null, tint = colors.accent, modifier = Modifier.size(26.dp))
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        com.example.flux.ui.components.Hint("Total pengeluaran", color = colors.muted)
+                        Text(translate(analyticsData.totalExpense), style = AppFont.Bold.copy(fontSize = 26.sp, color = colors.text))
+                        com.example.flux.ui.components.Hint(if (analyticsData.categoryStats.isEmpty()) "Belum ada pengeluaran" else "${analyticsData.categoryStats.size} kategori bulan ini", color = colors.muted)
+                    }
+                }
             }
         }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        LazyColumn(
-            contentPadding = PaddingValues(bottom = 100.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                if (analyticsData.categoryStats.isNotEmpty()) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().height(250.dp)) {
-                        DonutChart(data = analyticsData.categoryStats, modifier = Modifier.size(200.dp))
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Total Spent", style = AppFont.SemiBold.copy(fontSize = 14.sp, color = UIGray))
-                            Text(analyticsData.totalExpense, style = AppFont.Bold.copy(fontSize = 20.sp, color = UIWhite))
-                        }
-                    }
-                } else {
-                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        Text("No expenses this month", style = AppFont.Medium.copy(color = UIGray))
-                    }
+        item {
+            com.example.flux.ui.components.Panel {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Text(translate("Pemasukan"), style = AppFont.SemiBold.copy(color = UIWhite)); com.example.flux.ui.components.Hint("Selama bulan ini") }
+                    Text(translate(analyticsData.totalIncome), style = AppFont.Bold.copy(color = UIGreen, fontSize = 24.sp), modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                 }
             }
-
-            item {
-                Text("Daily Trend", style = AppFont.Bold.copy(fontSize = 18.sp, color = UIWhite), modifier = Modifier.padding(bottom = 12.dp))
-                MonthlySpendingGraph(dataPoints = analyticsData.dailyGraphData)
-                Spacer(modifier = Modifier.height(10.dp))
-            }
-
-            item {
-                FluxCard {
-                    Row(
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Income this month", style = AppFont.Medium.copy(color = UIGray))
-                        Text(analyticsData.totalIncome, style = AppFont.Bold.copy(color = CatGreen))
-                    }
-                }
-            }
-
-            if (analyticsData.categoryStats.isNotEmpty()) {
-                item {
-                    Text("Breakdown", style = AppFont.Bold.copy(fontSize = 18.sp, color = UIWhite), modifier = Modifier.padding(top = 8.dp))
-                }
-                items(analyticsData.categoryStats) { stat ->
-                    CategoryProgressRow(stat)
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(100.dp)) }
+        }
+        item {
+            com.example.flux.ui.components.SectionHeading("Tren harian")
+            Spacer(Modifier.height(10.dp))
+            MonthlySpendingGraph(analyticsData.dailyGraphData, focusDay = focusDay, monthKey = monthKey)
+        }
+        if (analyticsData.categoryStats.isNotEmpty()) {
+            item { com.example.flux.ui.components.SectionHeading("Per kategori") }
+            items(analyticsData.categoryStats) { stat -> FluxCard { Box(Modifier.padding(16.dp)) { CategoryProgressRow(stat) } } }
         }
     }
 }
-
 @Composable
 private fun DonutChart(
     data: List<CategoryStat>,
@@ -232,11 +190,11 @@ private fun CategoryProgressRow(stat: CategoryStat) {
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(stat.category, style = AppFont.Bold.copy(color = UIWhite, fontSize = 16.sp))
-                Text("${(stat.percentage * 100).toInt()}% of total", style = AppFont.Medium.copy(color = UIGray, fontSize = 14.sp))
+                Text(translate(stat.category), style = AppFont.Bold.copy(color = UIWhite, fontSize = 16.sp))
+                Text(translate("${(stat.percentage * 100).toInt()}% dari pengeluaran"), style = AppFont.Medium.copy(color = UIGray, fontSize = 14.sp))
             }
             Text(
-                text = NumberFormat.getCurrencyInstance(Locale("id", "ID")).format(stat.total).replace("Rp", "Rp "),
+                text = translate(NumberFormat.getCurrencyInstance(Locale("id", "ID")).format(stat.total).replace("Rp", "Rp ")),
                 style = AppFont.Bold.copy(color = UIWhite, fontSize = 18.sp)
             )
         }
@@ -251,14 +209,21 @@ private fun CategoryProgressRow(stat: CategoryStat) {
 }
 
 @Composable
-private fun MonthlySpendingGraph(dataPoints: List<DayData>, modifier: Modifier = Modifier) {
+private fun MonthlySpendingGraph(dataPoints: List<DayData>, modifier: Modifier = Modifier, focusDay: Int? = null, monthKey: String = "") {
     val maxDataValue = dataPoints.maxOfOrNull { it.amount } ?: 100000f
     val yAxisMax = maxOf(maxDataValue, 100000f) * 1.2f
     val scrollState = rememberScrollState()
     val dayColumnWidth = 50.dp
     val graphWidth = dayColumnWidth * dataPoints.size
-
-    LaunchedEffect(Unit) { scrollState.animateScrollTo(scrollState.maxValue) }
+    val columnPixels = with(LocalDensity.current) { dayColumnWidth.toPx() }
+    var viewportWidth by remember { mutableStateOf(0) }
+    LaunchedEffect(monthKey, focusDay, viewportWidth, scrollState.maxValue, columnPixels) {
+        if (viewportWidth > 0) {
+            val index = dataPoints.indexOfFirst { it.day == focusDay?.toString() }.coerceAtLeast(0)
+            val target = if (focusDay == null) 0 else ((index + .5f) * columnPixels - viewportWidth / 2f).toInt()
+            scrollState.scrollTo(target.coerceIn(0, scrollState.maxValue))
+        }
+    }
 
     FluxCard(modifier = modifier.fillMaxWidth().height(250.dp)) {
         Row(modifier = Modifier.padding(20.dp).fillMaxSize()) {
@@ -269,13 +234,13 @@ private fun MonthlySpendingGraph(dataPoints: List<DayData>, modifier: Modifier =
             ) {
                 val step = yAxisMax / 4
                 listOf(yAxisMax, yAxisMax - step, yAxisMax - step * 2, yAxisMax - step * 3, 0f).forEach { value ->
-                    Text("${(value / 1000).toInt()}k", style = AppFont.SemiBold.copy(color = UIWhite, fontSize = 10.sp), textAlign = TextAlign.End)
+                    Text(translate("${(value / 1000).toInt()}k"), style = AppFont.SemiBold.copy(color = UIWhite, fontSize = 10.sp), textAlign = TextAlign.End)
                 }
             }
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            Column(modifier = Modifier.weight(1f).horizontalScroll(scrollState)) {
+            Column(modifier = Modifier.weight(1f).onSizeChanged { viewportWidth = it.width }.horizontalScroll(scrollState)) {
                 Box(modifier = Modifier.weight(1f).width(graphWidth)) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val paddingBottom = 10.dp.toPx()
@@ -316,7 +281,8 @@ private fun MonthlySpendingGraph(dataPoints: List<DayData>, modifier: Modifier =
 
                 Row(modifier = Modifier.width(graphWidth).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     dataPoints.forEach {
-                        Text(text = it.day, style = AppFont.SemiBold.copy(color = UIGray, fontSize = 12.sp), textAlign = TextAlign.Center, modifier = Modifier.width(dayColumnWidth))
+                        val isToday = it.day == focusDay?.toString()
+                        Text(text = translate(it.day), style = AppFont.SemiBold.copy(color = if (isToday) com.example.flux.ui.theme.UITeal else UIGray, fontSize = 12.sp), textAlign = TextAlign.Center, modifier = Modifier.width(dayColumnWidth).then(if (isToday) Modifier.testTag("trend-today") else Modifier))
                     }
                 }
             }

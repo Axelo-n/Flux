@@ -8,5 +8,7 @@ data class DashboardState(
     val isExtraBalancePositive: Boolean = true,
     val dailyBudgetLeft: String = "Rp 0",
     val dailyUsagePercent: Float = 0f,
-    val graphData: List<DayData> = emptyList()
+    val graphData: List<DayData> = emptyList(),
+    val totals: BudgetTotals = BudgetTotals(),
+    val configured: Boolean = false
 )

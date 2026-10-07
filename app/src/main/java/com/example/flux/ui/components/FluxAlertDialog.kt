@@ -1,5 +1,7 @@
 package com.example.flux.ui.components
 
+import com.example.flux.preferences.translate
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,10 +45,10 @@ fun FluxAlertDialog(
                 .padding(24.dp)
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = title, style = AppFont.Bold.copy(fontSize = 20.sp, color = UIWhite))
+                Text(text = translate(title), style = AppFont.Bold.copy(fontSize = 20.sp, color = UIWhite))
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = message,
+                    text = translate(message),
                     style = AppFont.Regular.copy(fontSize = 16.sp, color = UIGray),
                     textAlign = TextAlign.Center
                 )
@@ -59,7 +61,7 @@ fun FluxAlertDialog(
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Cancel", style = AppFont.SemiBold.copy(color = UIGray))
+                        Text(translate("Cancel"), style = AppFont.SemiBold.copy(color = UIGray))
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Button(
@@ -68,7 +70,7 @@ fun FluxAlertDialog(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Delete", style = AppFont.Bold.copy(color = UIWhite))
+                        Text(translate("Delete"), style = AppFont.Bold.copy(color = UIWhite))
                     }
                 }
             }

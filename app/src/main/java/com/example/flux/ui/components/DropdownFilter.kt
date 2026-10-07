@@ -1,5 +1,7 @@
 package com.example.flux.ui.components
 
+import com.example.flux.preferences.translate
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -50,7 +52,7 @@ fun DropdownFilter(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = label, style = AppFont.Bold.copy(fontSize = 14.sp, color = UIBackground))
+            Text(text = translate(label), style = AppFont.Bold.copy(fontSize = 14.sp, color = UIBackground))
             Spacer(modifier = Modifier.width(6.dp))
             Icon(
                 painter = painterResource(R.drawable.ic_dropdown),
@@ -69,7 +71,7 @@ fun DropdownFilter(
         ) {
             items.forEachIndexed { index, item ->
                 DropdownMenuItem(
-                    text = { Text(text = item, color = if (item == label) UITeal else UIWhite) },
+                    text = { Text(text = translate(item), color = if (item == label) UITeal else UIWhite) },
                     onClick = {
                         onItemSelected(index, item)
                         expanded = false

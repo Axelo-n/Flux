@@ -1,5 +1,7 @@
 package com.example.flux.ui.transaction
 
+import com.example.flux.preferences.translate
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -52,7 +54,7 @@ data class CategoryItem(
     val color: Color
 )
 
-val transactionCategories = listOf(
+val transactionCategories get() = listOf(
     CategoryItem("Food and Beverages", R.drawable.ic_food_outline, CatOrange),
     CategoryItem("Transportation", R.drawable.ic_car_outline, CatGreen),
     CategoryItem("Groceries and Shopping", R.drawable.ic_cart_outline, CatPurple),
@@ -72,14 +74,14 @@ fun AmountInput(
         onValueChange = { if (it.all { char -> char.isDigit() }) onValueChange(it) },
         textStyle = AppFont.Bold.copy(fontSize = 48.sp, color = UIWhite, textAlign = TextAlign.Center),
         placeholder = {
-            Text(
-                "0",
+            Text(translate(
+                "0"),
                 style = AppFont.Bold.copy(fontSize = 48.sp, color = UIGray.copy(0.3f)),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
         },
-        prefix = { Text("Rp ", style = AppFont.Bold.copy(fontSize = 48.sp, color = UITeal), modifier = Modifier.padding(end = 4.dp)) },
+        prefix = { Text(translate("Rp "), style = AppFont.Bold.copy(fontSize = 48.sp, color = UITeal), modifier = Modifier.padding(end = 4.dp)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         colors = TextFieldDefaults.colors(
@@ -118,7 +120,7 @@ fun IncomeExpenseToggle(
                     .clickable { onToggle(false) },
                 contentAlignment = Alignment.Center
             ) {
-                Text("Expense", style = AppFont.Bold.copy(color = if (!isIncome) UIRed else UIGray))
+                Text(translate("Expense"), style = AppFont.SemiBold.copy(fontSize = 16.sp, color = if (!isIncome) UIRed else UIGray))
             }
             Box(
                 modifier = Modifier
@@ -130,52 +132,27 @@ fun IncomeExpenseToggle(
                     .clickable { onToggle(true) },
                 contentAlignment = Alignment.Center
             ) {
-                Text("Income", style = AppFont.Bold.copy(color = if (isIncome) UIGreen else UIGray))
+                Text(translate("Income"), style = AppFont.SemiBold.copy(fontSize = 16.sp, color = if (isIncome) UIGreen else UIGray))
             }
         }
     }
 }
 
 @Composable
-fun CategoryGrid(
-    selectedCategory: String,
-    onCategorySelected: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier) {
-        transactionCategories.chunked(3).forEach { rowItems ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                rowItems.forEach { item ->
-                    val isSelected = selectedCategory == item.name
-                    Column(
-                        modifier = Modifier.weight(1f).clickable { onCategorySelected(item.name) },
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(60.dp)
-                                .clip(CircleShape)
-                                .background(if (isSelected) item.color else UISurface)
-                                .border(width = 2.dp, color = if (isSelected) UIWhite.copy(0.2f) else Color.Transparent, shape = CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                painter = painterResource(id = item.iconRes),
-                                contentDescription = null,
-                                tint = if (isSelected) UIWhite else item.color,
-                                modifier = Modifier.size(28.dp)
-                            )
+fun CategoryGrid(selectedCategory: String, onCategorySelected: (String) -> Unit, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        val columns = if (maxWidth >= 280.dp && androidx.compose.ui.platform.LocalDensity.current.fontScale < 1.3f) 2 else 1
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            transactionCategories.chunked(columns).forEach { items ->
+                Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items.forEach { item ->
+                        val selected = selectedCategory == item.name
+                        androidx.compose.material3.Surface(onClick = { onCategorySelected(item.name) }, modifier = Modifier.weight(1f).fillMaxHeight(), color = if (selected) UITeal.copy(alpha = .1f) else com.example.flux.ui.theme.UISurfaceRaised, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) UITeal.copy(alpha = .6f) else Color.Transparent)) {
+                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(painterResource(item.iconRes), null, tint = if (selected) UITeal else item.color, modifier = Modifier.size(20.dp))
+                                Text(translate(item.name), style = AppFont.Medium.copy(fontSize = 13.sp, color = if (selected) UIWhite else UIGray), maxLines = 3, modifier = Modifier.weight(1f))
+                            }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = item.name,
-                            style = AppFont.Medium.copy(fontSize = 12.sp, color = if (isSelected) UIWhite else UIGray),
-                            maxLines = 2,
-                            textAlign = TextAlign.Center
-                        )
                     }
                 }
             }
