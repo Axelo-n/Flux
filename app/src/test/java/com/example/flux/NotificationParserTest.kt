@@ -6,6 +6,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NotificationParserTest {
+    @Test fun bluOutgoingTransferWithAmountBeforeRecipientIsAnExpense() {
+        val title = "Kamu Berhasil Mengirimkan Dana!"
+        val text = "Transfer Rp 22.000 ke YOLANDA SETIAWAN berhasil"
+        val parsed = Parser.parse(title, text, emptyList())!!
+        assertEquals(22000.0, parsed.amount, 0.0)
+        assertFalse(parsed.isIncome)
+        assertEquals("Account Transfer", parsed.category)
+        assertEquals("YOLANDA SETIAWAN", parsed.note)
+        val rule = ParserRule(keyword = "yolanda setiawan", targetCategory = "Food and Beverages", targetNote = "Nasgor")
+        val custom = Parser.parse(title, text, listOf(rule))!!
+        assertEquals("Food and Beverages", custom.category)
+        assertEquals("Nasgor", custom.note)
+        assertFalse(custom.isIncome)
+    }
+    @Test fun outgoingTransferFormatStillRejectsFailedPendingAndBlacklistedNotifications() {
+        val text = "Transfer Rp 22.000 ke YOLANDA SETIAWAN"
+        listOf("gagal", "tidak berhasil", "sedang diproses", "akan diproses", "").forEach {
+            assertNull(Parser.parse("blu", "$text $it", emptyList()))
+        }
+        assertNull(Parser.parse("blu", "$text berhasil", listOf(ParserRule(keyword = "yolanda", targetCategory = "Other", blocked = true))))
+        assertNull(Parser.parse("blu", "$text berhasil, saldo Rp 900.000", emptyList()))
+    }
     @Test fun merchantAndTransferDestinationBecomeNotes() {
         val expense = Parser.parse("blu", "Transaksi di gorengan gembleng Rp 5000 berhasil", emptyList())!!
         assertEquals("gorengan gembleng", expense.note)

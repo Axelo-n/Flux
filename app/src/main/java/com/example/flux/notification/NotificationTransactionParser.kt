@@ -19,7 +19,9 @@ object NotificationTransactionParser {
         if (listOf("refund", "pengembalian dana", "dikembalikan", "dibatalkan").any { content.contains(it) }) return null
         if (listOf("gagal", "tidak berhasil", "otp", "kode verifikasi", "akan diproses", "sedang diproses", "promo").any { content.contains(it) }) return null
         val income = listOf("dana masuk", "terima transfer", "transfer masuk", "menerima transfer", "transfer diterima").any { content.contains(it) }
-        val expense = listOf("pembayaran", "bayar", "transfer ke", "transfer berhasil", "kirim dana", "transfer keluar", "tarik tunai", "top up", "topup", "transaksi berhasil", "pembelian", "qris berhasil").any { content.contains(it) } || (Regex("\\btransaksi\\s+di\\b").containsMatchIn(content) && content.contains("berhasil"))
+        // blu places the amount between "Transfer" and "ke", so literal "transfer ke" misses it.
+        val outgoingTransfer = Regex("\\btransfer\\s+(?:rp\\.?|idr)\\s*[0-9].*?\\b(?:ke|kepada)\\s+.+?\\s+(?:berhasil|sukses)[.!]?\\s*$", RegexOption.DOT_MATCHES_ALL).containsMatchIn(content)
+        val expense = outgoingTransfer || listOf("pembayaran", "bayar", "transfer ke", "transfer berhasil", "kirim dana", "transfer keluar", "tarik tunai", "top up", "topup", "transaksi berhasil", "pembelian", "qris berhasil").any { content.contains(it) } || (Regex("\\btransaksi\\s+di\\b").containsMatchIn(content) && content.contains("berhasil"))
         if (!income && !expense) return null
         val amount = extractAmount(content)
         if (amount <= 0 || amount > BudgetEngine.MAX_AMOUNT) return null
