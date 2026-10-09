@@ -74,8 +74,9 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
                     HistoryScreen(viewModel = viewModel, navController = navController, onBack = { navController.popBackStack() })
                 }
                 composable(FluxRoutes.WALLET) {
-                    SettingsScreen(viewModel = viewModel, onBudget = { navController.navigate("budget") }, onRules = { navController.navigate("rules") }, onRestart = { navController.navigate("restart") })
+                    SettingsScreen(viewModel = viewModel, onBudget = { navController.navigate("budget") }, onRules = { navController.navigate("rules") }, onRestart = { navController.navigate("restart") }, onPockets = { navController.navigate("pockets") })
                 }
+                composable("pockets") { com.example.flux.ui.settings.PocketPlannerScreen(viewModel, { navController.popBackStack() }) }
                 composable("budget") { BudgetSettingsScreen(viewModel, { navController.popBackStack() }) }
                 composable("rules") { RulesScreen(viewModel, { navController.popBackStack() }) }
                 composable("restart") { BudgetSettingsScreen(viewModel, { navController.popBackStack() }, restart = true) }

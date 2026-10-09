@@ -294,9 +294,9 @@ private fun MonthlySpendingGraph(dataPoints: List<DayData>, modifier: Modifier =
 @Composable
 private fun AnalyticsScreenPreview() {
     val dummyStats = listOf(
-        CategoryStat("Food & Beverages", 1250000.0, 0.5f, CatOrange, R.drawable.ic_food_outline),
-        CategoryStat("Transportation", 750000.0, 0.3f, CatGreen, R.drawable.ic_car_outline),
-        CategoryStat("Entertainment", 500000.0, 0.2f, CatYellow, R.drawable.ic_ticket_outline)
+        CategoryStat("Food & Beverages", 1250000.0, 0.5f, CatOrange, R.drawable.ic_category_food),
+        CategoryStat("Transportation", 750000.0, 0.3f, CatGreen, R.drawable.ic_category_transport),
+        CategoryStat("Entertainment", 500000.0, 0.2f, CatYellow, R.drawable.ic_category_entertainment)
     )
     FluxTheme {
         AnalyticsScreenContent(

@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [TransactionEntity::class, ParserRule::class, FinanceConfig::class, BudgetPolicy::class, BalanceAdjustment::class, NotificationRecord::class], version = 3, exportSchema = false)
+@Database(entities = [TransactionEntity::class, ParserRule::class, FinanceConfig::class, BudgetPolicy::class, BalanceAdjustment::class, NotificationRecord::class, MonthlyPocket::class], version = 4, exportSchema = false)
 abstract class TransactionDatabase : RoomDatabase() {
 
     abstract fun transactionDao(): TransactionDao
@@ -17,6 +17,12 @@ abstract class TransactionDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: TransactionDatabase? = null
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE monthly_pockets (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, amount INTEGER NOT NULL)")
+            }
+        }
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -54,7 +60,7 @@ abstract class TransactionDatabase : RoomDatabase() {
                     TransactionDatabase::class.java,
                     "flux_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 .also { INSTANCE = it }
             }

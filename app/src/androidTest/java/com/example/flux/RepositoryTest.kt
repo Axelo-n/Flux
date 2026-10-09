@@ -25,6 +25,83 @@ class RepositoryTest {
     }
     @After fun close() { db.close() }
     private fun event(id: String, text: String = "Rp 40.000 seller", fingerprint: String = "fingerprint", time: Long = System.currentTimeMillis(), occurrence: String = id) = NotificationRecord(id, fingerprint, time, "Pembayaran berhasil", text, "", "", occurrence)
+    @Test fun monthlyPocketsPersistAndBackupWithoutChangingMoney() = runBlocking {
+        repo.saveMonthlyPocket(MonthlyPocket(name = "Uang kos", amount = 1500000))
+        val pocket = db.financeDao().monthlyPockets().single()
+        val backup = repo.backup()
+        assertEquals(1500000L, backup.monthlyPockets!!.single().amount)
+        assertEquals(1000000L, backup.config!!.openingBalance)
+        assertTrue(backup.transactions.isEmpty())
+        repo.saveMonthlyPocket(pocket.copy(amount = 1600000))
+        assertEquals(1600000L, db.financeDao().monthlyPockets().single().amount)
+        repo.deleteMonthlyPocket(pocket)
+        assertTrue(db.financeDao().monthlyPockets().isEmpty())
+        val json = com.google.gson.Gson().toJson(backup)
+        repo.restoreData(com.google.gson.Gson().fromJson(json, FluxBackupData::class.java))
+        assertEquals(pocket, db.financeDao().monthlyPockets().single())
+        assertTrue(repo.getAllTransactionsSync().isEmpty())
+        assertTrue(runCatching { repo.saveMonthlyPocket(pocket.copy(amount = -1)) }.isFailure)
+        assertTrue(runCatching { repo.restoreData(backup.copy(monthlyPockets = listOf(pocket.copy(amount = -1)))) }.isFailure)
+        assertEquals(pocket, db.financeDao().monthlyPockets().single())
+    }
+    @Test fun olderBackupWithoutPocketsStillRestores() = runBlocking {
+        val json = com.google.gson.JsonParser.parseString(com.google.gson.Gson().toJson(repo.backup())).asJsonObject
+        json.remove("monthlyPockets")
+        repo.saveMonthlyPocket(MonthlyPocket(name = "Tabungan", amount = 100000))
+        repo.restoreData(com.google.gson.Gson().fromJson(json, FluxBackupData::class.java))
+        assertTrue(db.financeDao().monthlyPockets().isEmpty())
+        assertEquals(1000000L, db.financeDao().config()!!.openingBalance)
+    }
+    @Test fun cashbackRestoresBalanceAndBudgetWithoutAddingIncome() = runBlocking {
+        val now = System.currentTimeMillis()
+        repo.insert(TransactionEntity(amount = 40000.0, note = "Warung Budi", category = "Lunch", isIncome = false, date = now - 1000))
+        val input = event("cashback", "Cashback Rp 5.000 dari Warung Budi berhasil", "cashback-fingerprint", now).copy(title = "Cashback diterima")
+        assertTrue(repo.recordNotificationDetail(input)!!.isCashback)
+        val row = repo.getAllTransactionsSync().single()
+        assertEquals(5000.0, row.refund, 0.0)
+        assertTrue(row.refundNote.contains("Cashback"))
+        val totals = com.example.flux.model.BudgetEngine.calculate(db.financeDao().config(), db.financeDao().policies(), listOf(row), emptyList(), LocalDate.ofEpochDay(today))
+        assertEquals(965000L, totals.balance); assertEquals(15000L, totals.remaining)
+        assertFalse(repo.recordNotification(input))
+        assertTrue(runCatching { repo.linkCashback(input.eventId, row.id) }.isFailure)
+    }
+    @Test fun ambiguousCashbackWaitsForSelectionAndDuplicateCopiesCloseTogether() = runBlocking {
+        val now = System.currentTimeMillis()
+        repeat(2) { repo.insert(TransactionEntity(amount = 40000.0, note = "Warung Budi", category = "Lunch", isIncome = false, date = now - 2000 + it)) }
+        val input = event("cashback", "Cashback Rp 5.000 dari Warung Budi berhasil", "cashback-fingerprint", now, "cashback-occurrence").copy(title = "Cashback diterima")
+        assertNull(repo.recordNotificationDetail(input))
+        val copy = input.copy(eventId = "cashback-update", fingerprint = "changed-payload")
+        assertNull(repo.recordNotificationDetail(copy))
+        assertTrue(repo.getAllTransactionsSync().all { it.refund == 0.0 })
+        val chosen = repo.getAllTransactionsSync().first()
+        repo.linkCashback(input.eventId, chosen.id)
+        assertEquals(5000.0, repo.getAllTransactionsSync().sumOf { it.refund }, 0.0)
+        assertEquals("Diabaikan", db.financeDao().notification(copy.eventId)!!.status)
+        assertTrue(runCatching { repo.linkCashback(copy.eventId, chosen.id) }.isFailure)
+    }
+    @Test fun cashbackOnEarlierDayRestoresExtraAndRejectsOverRefund() = runBlocking {
+        val yesterday = LocalDate.ofEpochDay(today).minusDays(1)
+        val yesterdayTime = yesterday.atTime(12, 0).atZone(ZoneId.of("Asia/Jakarta")).toInstant().toEpochMilli()
+        repo.start(FinanceConfig(startDay = yesterday.toEpochDay(), openingBalance = 1000000, activatedAt = 0), BudgetPolicy(yesterday.toEpochDay(), List(7) { 50000 }.joinToString(",")))
+        repo.insert(TransactionEntity(amount = 40000.0, note = "", category = "Lunch", isIncome = false, date = yesterdayTime))
+        val input = event("cashback", "Cashback Rp 5.000 berhasil diterima", "cashback-fingerprint").copy(title = "Cashback diterima")
+        assertNull(repo.recordNotificationDetail(input))
+        val row = repo.getAllTransactionsSync().single()
+        repo.linkCashback(input.eventId, row.id)
+        val totals = com.example.flux.model.BudgetEngine.calculate(db.financeDao().config(), db.financeDao().policies(), repo.getAllTransactionsSync(), emptyList(), LocalDate.ofEpochDay(today))
+        assertEquals(15000L, totals.extra); assertEquals(50000L, totals.remaining)
+        val excessive = input.copy(eventId = "too-much", occurrenceId = "too-much", fingerprint = "too-much", text = "Cashback Rp 50.000 berhasil diterima")
+        assertNull(repo.recordNotificationDetail(excessive))
+        assertTrue(runCatching { repo.linkCashback(excessive.eventId, row.id) }.isFailure)
+        assertEquals(5000.0, repo.getAllTransactionsSync().single().refund, 0.0)
+    }
+    @Test fun manuallyHandledCashbackNeverChangesMoney() = runBlocking {
+        val input = event("manual-cashback", "Cashback Rp 5.000 berhasil diterima", "manual-cashback").copy(title = "Cashback diterima")
+        assertNull(repo.recordNotificationDetail(input))
+        repo.dismissCashback(input.eventId)
+        assertTrue(repo.getAllTransactionsSync().isEmpty())
+        assertFalse(repo.recordNotification(input.copy(eventId = "manual-update")))
+    }
     @Test fun duplicateReconnectAndUpdateOnlyRecordOnce() = runBlocking {
         assertTrue(repo.recordNotification(event("one", occurrence = "same")))
         assertFalse(repo.recordNotification(event("one", occurrence = "same")))
@@ -98,7 +175,7 @@ class RepositoryTest {
             sql.execSQL("INSERT INTO transactions VALUES (1, 40000, 'old', 'Other', 0, 1)")
             sql.version = 2
         }
-        val migrated = Room.databaseBuilder(context, TransactionDatabase::class.java, name).addMigrations(TransactionDatabase.MIGRATION_2_3).build()
+        val migrated = Room.databaseBuilder(context, TransactionDatabase::class.java, name).addMigrations(TransactionDatabase.MIGRATION_2_3, TransactionDatabase.MIGRATION_3_4).build()
         try { assertEquals("old", migrated.transactionDao().getAllTransactionsSync().single().note); assertNull(migrated.financeDao().config()) }
         finally { migrated.close(); context.deleteDatabase(name) }
     }

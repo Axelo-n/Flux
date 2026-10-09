@@ -27,11 +27,11 @@ fun TransactionItem(data: Transaction, onClick: (() -> Unit)? = null) {
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(if (data.note.isBlank()) translate(data.title) else data.title, style = AppFont.SemiBold.copy(color = UIWhite, fontSize = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (data.refund > 0) "${translate(if (data.amount == 0.0) "Cancel" else "Refund")} · ${data.refundNote}" else "${translate(data.category)} · ${translate(data.source)}", style = AppFont.Regular.copy(color = UIGray, fontSize = 12.sp), maxLines = if (data.refund > 0) 2 else 1, overflow = TextOverflow.Ellipsis)
+            Text(if (data.refund > 0) "${translate(if (data.refundNote.contains("Cashback", true)) "Refund / cashback" else if (data.amount == 0.0) "Cancel" else "Refund")} · ${data.refundNote}" else "${translate(data.category)} · ${translate(data.source)}", style = AppFont.Regular.copy(color = UIGray, fontSize = 12.sp), maxLines = if (data.refund > 0) 2 else 1, overflow = TextOverflow.Ellipsis)
         }
         Column(Modifier.widthIn(max = 150.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(translate(data.formattedAmount), style = AppFont.SemiBold.copy(color = if (data.amount == 0.0) UIGray else if (data.isIncome) UIGreen else UIWhite, fontSize = 16.sp))
-            Text(translate(if (data.amount == 0.0) "Dibatalkan" else if (data.isIncome) "Pemasukan" else "Pengeluaran"), style = AppFont.Regular.copy(color = UIGray, fontSize = 11.sp))
+            Text(translate(if (data.amount == 0.0 && data.refundNote.contains("Cashback", true)) "Dikembalikan penuh" else if (data.amount == 0.0) "Dibatalkan" else if (data.isIncome) "Pemasukan" else "Pengeluaran"), style = AppFont.Regular.copy(color = UIGray, fontSize = 11.sp))
         }
     }
 }

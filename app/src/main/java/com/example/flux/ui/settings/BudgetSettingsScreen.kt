@@ -43,7 +43,7 @@ fun BudgetSettingsScreen(viewModel: DashboardViewModel, onBack: (() -> Unit)? = 
             HorizontalDivider(color = UIBorder)
             Text(translate("Pergantian hari"), style = AppFont.SemiBold, color = UIWhite)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                listOf("Asia/Jakarta" to "WIB", "Asia/Makassar" to "WITA", "Asia/Jayapura" to "WIT").forEach { (zone, label) -> FilterChip(timezone == zone, { timezone = zone }, { Text(translate(label)) }) }
+                val zones = listOf("Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura"); FilterTabs(listOf("WIB", "WITA", "WIT"), zones.indexOf(timezone)) { timezone = zones[it] }
             }
             TextButton({ customZone = !customZone }) { Text(translate(if (customZone) "Tutup zona waktu lain" else "Zona waktu lain")) }
             if (customZone) FormField(timezone, { timezone = it.trim() }, "Zona waktu", isError = !zoneValid)

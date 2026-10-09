@@ -43,3 +43,7 @@ data class NotificationRecord(
     val detail: String,
     val occurrenceId: String = eventId
 )
+
+/** A planning allocation, never an expense or balance adjustment. */
+@Entity(tableName = "monthly_pockets")
+data class MonthlyPocket(@PrimaryKey(autoGenerate = true) val id: Int = 0, val name: String, val amount: Long)

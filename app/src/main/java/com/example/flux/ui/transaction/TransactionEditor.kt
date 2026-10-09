@@ -24,7 +24,7 @@ fun TransactionEditor(viewModel: DashboardViewModel, transaction: Transaction?, 
     val zone = ZoneId.of(config?.timezone ?: "Asia/Jakarta")
     var amount by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.originalAmount?.toLong()?.toString().orEmpty()) }
     var note by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.note.orEmpty()) }
-    var category by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.category ?: "Food and Beverages") }
+    var category by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.category ?: MealCategories.at(System.currentTimeMillis(), zone.id)) }
     var income by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.isIncome ?: false) }
     var dateText by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.let { BudgetEngine.day(it.date, zone.id).toString() } ?: LocalDate.now(zone).toString()) }
     var refund by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.refund?.takeIf { it > 0 }?.toLong()?.toString().orEmpty()) }
@@ -47,18 +47,18 @@ fun TransactionEditor(viewModel: DashboardViewModel, transaction: Transaction?, 
             DateInput(dateText, { dateText = it }, validDate, earliest = config?.let { LocalDate.ofEpochDay(it.startDay) }, latest = LocalDate.now(zone), filled = true)
             FormField(note, { note = it }, "Catatan · opsional", placeholder = "Contoh: nasgor malam", singleLine = false)
         }
-        Panel("Kategori") { CategoryGrid(category, { category = it }) }
-        if (!income) Panel("Refund / cancel") {
+        CategorySelector(category, { category = it })
+        if (!income) Panel("Refund / cashback / cancel") {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Hint("Ada pengembalian dana?")
-                TextButton({ showRefund = !showRefund }) { Text(translate(if (showRefund) "Ringkas" else "Tambahkan refund")) }
+                Hint("Ada refund atau cashback?")
+                TextButton({ showRefund = !showRefund }) { Text(translate(if (showRefund) "Ringkas" else "Tambahkan refund / cashback")) }
             }
             if (showRefund) {
             Hint("Refund mengurangi pengeluaran pada tanggal asal. Saldo, budget, dan extra ikut dihitung ulang.")
-            FormField(refund, { if (it.all(Char::isDigit)) refund = it }, "Total refund (Rp) · kosong jika tidak ada", money = true)
+            FormField(refund, { if (it.all(Char::isDigit)) refund = it }, "Total refund + cashback (Rp)", money = true)
             OutlinedButton({ refund = amount }, shape = RoundedCornerShape(14.dp)) { Text(translate("Refund penuh")) }
             if (!refund.isBlank() && (refundValue ?: 0) > 0) {
-                FormField(refundNote, { refundNote = it }, "Alasan refund / cancel · wajib", singleLine = false)
+                FormField(refundNote, { refundNote = it }, "Alasan refund / cashback · wajib", singleLine = false)
                 Text(translate("Pengeluaran efektif: ${rupiah((value ?: 0) - (refundValue ?: 0))}"), color = UITeal, style = AppFont.Bold)
             }
             }

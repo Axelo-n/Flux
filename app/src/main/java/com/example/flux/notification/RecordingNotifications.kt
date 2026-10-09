@@ -21,7 +21,7 @@ object RecordingNotifications {
         val manager = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(channel, translate("Transaksi tercatat"), NotificationManager.IMPORTANCE_DEFAULT))
         val intent = PendingIntent.getActivity(context, 1, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val summary = "${translate(if (parsed.isIncome) "Pemasukan" else "Pengeluaran")} · ${rupiah(parsed.amount.toLong())} · ${parsed.note.ifBlank { translate(parsed.category) }}"
+        val summary = "${translate(if (parsed.isCashback) "Cashback" else if (parsed.isIncome) "Pemasukan" else "Pengeluaran")} · ${rupiah(parsed.amount.toLong())} · ${parsed.note.ifBlank { translate(parsed.category) }}"
         manager.notify(id(eventId), NotificationCompat.Builder(context, channel).setSmallIcon(R.drawable.ic_wallet_outline).setContentTitle(translate("Transaksi tercatat")).setContentText(summary).setStyle(NotificationCompat.BigTextStyle().bigText(summary)).setContentIntent(intent).setAutoCancel(true).setOnlyAlertOnce(true).build())
     }
 }

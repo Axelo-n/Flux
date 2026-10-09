@@ -23,5 +23,6 @@ data class FluxBackupData(
     val version: Int = 2,
     val config: FinanceConfig? = null,
     val policies: List<BudgetPolicy> = emptyList(),
-    val adjustments: List<BalanceAdjustment> = emptyList()
+    val adjustments: List<BalanceAdjustment> = emptyList(),
+    val monthlyPockets: List<MonthlyPocket>? = emptyList()
 )

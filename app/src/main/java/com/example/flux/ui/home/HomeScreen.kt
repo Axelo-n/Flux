@@ -45,6 +45,7 @@ import java.util.Locale
 @Composable
 fun HomeScreen(viewModel: DashboardViewModel, onSettings: () -> Unit = {}, onTransaction: (Int) -> Unit = {}, onAdd: () -> Unit = {}, onHistory: () -> Unit = {}) {
     val state by viewModel.uiState.collectAsState()
+    val pendingCashbacks by viewModel.pendingCashbacks.collectAsState()
     val config by viewModel.config.collectAsState()
     val health by FluxNotificationListenerService.health.collectAsState()
     val zone = config?.timezone ?: "Asia/Jakarta"
@@ -67,6 +68,14 @@ fun HomeScreen(viewModel: DashboardViewModel, onSettings: () -> Unit = {}, onTra
                         Box(Modifier.size(6.dp).clip(CircleShape).background(if (luca) UIAccentFill else if (health.connected) UITeal else UIWarning))
                         Text(translate(if (health.connected) "blu aktif" else "Cek blu"), color = if (luca) UIAccentFill else if (health.connected) UITeal else UIWarning, style = AppFont.SemiBold)
                     }
+                }
+            }
+        }
+        if (pendingCashbacks.isNotEmpty()) item {
+            Surface(onClick = onSettings, color = UISurfaceRaised, shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(translate("Cashback menunggu transaksi asal"), color = UITeal, style = AppFont.SemiBold)
+                    Hint("Pilih transaksi di Sistem untuk mengembalikan budget.")
                 }
             }
         }

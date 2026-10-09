@@ -102,3 +102,12 @@ Debug APK: `app/build/outputs/apk/debug/app-debug.apk`.
 System → Preferences offers Indonesian/English and White/Black/Teal/Violet. Preferences persist independently of the financial database; changing language or theme never rewrites transaction notes or categories. Each theme changes the full palette, including cards, inputs and the budget hero.
 
 Recognized blu notifications use the merchant/recipient name as the default note when present. An enabled custom rule with a non-empty note overrides it. Confirmation notifications are sent only after the database transaction commits successfully; duplicates, blacklist matches and messages requiring review do not send a success notification. Android notification permission and channel settings control their delivery.
+
+### Cashback, meals, and weekly pockets
+Cashback notifications are returns against an expense, never income. A single exact merchant match links automatically; ambiguous or unnamed cashback waits for selection in System. Cashback and refunds share the total returned amount on the original expense, restoring its budget and recalculating extra. Mark already manually handled notifications complete to avoid applying them twice. Notification logs, including unresolved cashback, are excluded from backups.
+
+Automatic food categories use the original notification timestamp in the configured time zone: Breakfast 05:00–09:59, Lunch 10:00–14:59, Dinner 15:00–04:59. Custom rules override these categories. Other existing categories remain available.
+
+System → Pocket budget is a calculator with Monday–Sunday weeks clipped to month boundaries. It sums effective daily policies and uses the earliest weekly pattern for dates before the first policy. It never moves funds or creates records.
+
+Pocket cards use a two-column grid; tapping opens the daily breakdown or manual pocket actions. Fixed monthly pockets are stored separately from expenses, included in allocation totals and backups. Room 3→4 migration adds their table without resetting existing finance data; older v2 backups remain readable.

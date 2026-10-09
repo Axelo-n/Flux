@@ -6,6 +6,24 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NotificationParserTest {
+    @Test fun mealHoursUseTheNotificationTimeAndCustomRulesWin() {
+        fun at(hour: Int) = java.time.LocalDate.of(2026, 10, 9).atTime(hour, 0).atZone(java.time.ZoneId.of("Asia/Jakarta")).toInstant().toEpochMilli()
+        val expected = mapOf(4 to "Dinner", 5 to "Breakfast", 9 to "Breakfast", 10 to "Lunch", 14 to "Lunch", 15 to "Dinner", 23 to "Dinner")
+        expected.forEach { (hour, category) -> assertEquals(category, Parser.parse("Transaksi berhasil", "Transaksi di warung Rp 5000 berhasil", emptyList(), at(hour))!!.category) }
+        val custom = ParserRule(keyword = "warung", targetCategory = "Food stock", targetNote = "Bekal")
+        assertEquals("Food stock", Parser.parse("Transaksi berhasil", "Transaksi di warung Rp 5000 berhasil", listOf(custom), at(10))!!.category)
+        assertEquals("Dinner", com.example.flux.model.MealCategories.at(at(10), "UTC"))
+    }
+    @Test fun cashbackIsAReturnNotAnIncomeOrNewExpense() {
+        val cashback = Parser.parse("Cashback berhasil diterima", "Cashback Rp 2000 dari Warung Budi berhasil", emptyList())!!
+        assertTrue(cashback.isCashback)
+        assertFalse(cashback.isIncome)
+        assertEquals(2000.0, cashback.amount, 0.0)
+        assertEquals("Warung Budi", cashback.note)
+        assertNull(Parser.parse("Promo cashback", "Dapatkan cashback Rp 2000", emptyList()))
+        assertNull(Parser.parse("Cashback sedang diproses", "Rp 2000", emptyList()))
+    }
+
     @Test fun bluOutgoingTransferWithAmountBeforeRecipientIsAnExpense() {
         val title = "Kamu Berhasil Mengirimkan Dana!"
         val text = "Transfer Rp 22.000 ke YOLANDA SETIAWAN berhasil"

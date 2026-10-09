@@ -54,14 +54,7 @@ data class CategoryItem(
     val color: Color
 )
 
-val transactionCategories get() = listOf(
-    CategoryItem("Food and Beverages", R.drawable.ic_food_outline, CatOrange),
-    CategoryItem("Transportation", R.drawable.ic_car_outline, CatGreen),
-    CategoryItem("Groceries and Shopping", R.drawable.ic_cart_outline, CatPurple),
-    CategoryItem("Entertainment", R.drawable.ic_ticket_outline, CatYellow),
-    CategoryItem("Account Transfer", R.drawable.ic_card_outline, CatBlue),
-    CategoryItem("Other", R.drawable.ic_other_outline, CatGrey)
-)
+val transactionCategories get() = com.example.flux.ui.theme.categoryVisuals.filter { it.name != "Income" }.map { CategoryItem(it.name, it.icon, it.color) }
 
 @Composable
 fun AmountInput(
@@ -133,28 +126,6 @@ fun IncomeExpenseToggle(
                 contentAlignment = Alignment.Center
             ) {
                 Text(translate("Income"), style = AppFont.SemiBold.copy(fontSize = 16.sp, color = if (isIncome) UIGreen else UIGray))
-            }
-        }
-    }
-}
-
-@Composable
-fun CategoryGrid(selectedCategory: String, onCategorySelected: (String) -> Unit, modifier: Modifier = Modifier) {
-    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
-        val columns = if (maxWidth >= 280.dp && androidx.compose.ui.platform.LocalDensity.current.fontScale < 1.3f) 2 else 1
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            transactionCategories.chunked(columns).forEach { items ->
-                Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items.forEach { item ->
-                        val selected = selectedCategory == item.name
-                        androidx.compose.material3.Surface(onClick = { onCategorySelected(item.name) }, modifier = Modifier.weight(1f).fillMaxHeight(), color = if (selected) UITeal.copy(alpha = .1f) else com.example.flux.ui.theme.UISurfaceRaised, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) UITeal.copy(alpha = .6f) else Color.Transparent)) {
-                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(painterResource(item.iconRes), null, tint = if (selected) UITeal else item.color, modifier = Modifier.size(20.dp))
-                                Text(translate(item.name), style = AppFont.Medium.copy(fontSize = 13.sp, color = if (selected) UIWhite else UIGray), maxLines = 3, modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
-                }
             }
         }
     }

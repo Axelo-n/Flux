@@ -12,10 +12,22 @@ class TransactionRepository(private val database: TransactionDatabase) {
     private val finance = database.financeDao()
     val allTransactions = transactions.getAllTransactions()
     val allRules = rules.getAllRules()
+    val monthlyPockets = finance.observeMonthlyPockets()
+    suspend fun saveMonthlyPocket(pocket: MonthlyPocket) {
+        require(finance.config() != null)
+        validateMonthlyPocket(pocket)
+        finance.saveMonthlyPocket(pocket.copy(name = pocket.name.trim()))
+    }
+    suspend fun deleteMonthlyPocket(pocket: MonthlyPocket) = finance.deleteMonthlyPocket(pocket)
+    private fun validateMonthlyPocket(pocket: MonthlyPocket) {
+        require(pocket.id >= 0 && pocket.name.trim().isNotEmpty() && pocket.name.length <= 80) { "Isi nama pocket (maksimal 80 karakter)" }
+        require(pocket.amount in 1..BudgetEngine.MAX_AMOUNT) { "Nominal pocket harus positif" }
+    }
     val config = finance.observeConfig()
     val policies = finance.observePolicies()
     val adjustments = finance.observeAdjustments()
     val notifications = finance.observeNotifications()
+    val pendingCashbacks = finance.observePendingCashbacks()
     suspend fun insert(transaction: TransactionEntity) {
         validateTransaction(transaction)
         val settings = requireNotNull(finance.config()) { "Atur sistem dulu" }
@@ -38,7 +50,7 @@ class TransactionRepository(private val database: TransactionDatabase) {
         require(policy.effectiveDay == config.startDay)
         validatePolicy(policy)
         transactions.clearAll(); rules.clearAll(); finance.clearNotifications()
-        finance.clearAdjustments(); finance.clearPolicies(); finance.clearConfig()
+        finance.clearAdjustments(); finance.clearPolicies(); finance.clearConfig(); finance.clearMonthlyPockets()
         finance.saveConfig(config); finance.addPolicy(policy)
     }
     suspend fun addPolicy(policy: BudgetPolicy) {
@@ -59,9 +71,12 @@ class TransactionRepository(private val database: TransactionDatabase) {
         finance.addAdjustment(adjustment)
     }
     suspend fun deleteAdjustment(adjustment: BalanceAdjustment) = finance.deleteAdjustment(adjustment)
-    suspend fun backup() = FluxBackupData(transactions.getAllTransactionsSync(), rules.getAllRulesSync(), config = finance.config(), policies = finance.policies(), adjustments = finance.adjustments())
+    suspend fun backup() = FluxBackupData(transactions.getAllTransactionsSync(), rules.getAllRulesSync(), config = finance.config(), policies = finance.policies(), adjustments = finance.adjustments(), monthlyPockets = finance.monthlyPockets())
     suspend fun restoreData(backup: FluxBackupData) = database.withTransaction {
         require(backup.version == 2) { "Backup versi lama tidak didukung" }
+        val pockets = backup.monthlyPockets.orEmpty()
+        require(pockets.map { it.id }.distinct().size == pockets.size)
+        pockets.forEach { validateMonthlyPocket(it); require(it.id > 0) }
         val config = requireNotNull(backup.config)
         ZoneId.of(config.timezone)
         val today = LocalDate.now(ZoneId.of(config.timezone)).toEpochDay()
@@ -77,11 +92,12 @@ class TransactionRepository(private val database: TransactionDatabase) {
             require(BudgetEngine.day(it.date, config.timezone).toEpochDay() in config.startDay..today)
         }
         transactions.clearAll(); rules.clearAll(); finance.clearNotifications()
-        finance.clearAdjustments(); finance.clearPolicies(); finance.clearConfig()
+        finance.clearAdjustments(); finance.clearPolicies(); finance.clearConfig(); finance.clearMonthlyPockets()
         finance.saveConfig(config.copy(activatedAt = System.currentTimeMillis()))
         backup.policies.forEach { finance.addPolicy(it) }
         transactions.insertAll(backup.transactions); rules.insertAll(backup.rules)
         backup.adjustments.forEach { finance.addAdjustment(it) }
+        pockets.forEach { finance.saveMonthlyPocket(it) }
     }
     /** Notification log and money record commit together. */
     suspend fun recordNotification(event: NotificationRecord): Boolean = recordNotificationDetail(event) != null
@@ -96,12 +112,48 @@ class TransactionRepository(private val database: TransactionDatabase) {
         }
         val customRules = rules.getAllRulesSync()
         val blocked = NotificationTransactionParser.blockedBy(event.title, event.text, customRules)
-        val parsed = if (blocked == null) NotificationTransactionParser.parse(event.title, event.text, customRules) else null
+        val parsed = if (blocked == null) NotificationTransactionParser.parse(event.title, event.text, customRules, event.postedAt, config.timezone) else null
+        if (parsed?.isCashback == true) {
+            val candidates = transactions.getAllTransactionsSync().filter { eligibleCashback(it, event, parsed.amount) && parsed.note.isNotBlank() && it.note.equals(parsed.note, ignoreCase = true) }
+            finance.addNotification(event.copy(status = "Cashback perlu ditautkan", detail = "Pilih transaksi asal untuk mengembalikan saldo dan budget."))
+            if (candidates.size == 1) {
+                applyCashback(event, candidates.single(), parsed.amount)
+                return@withTransaction parsed
+            }
+            return@withTransaction null
+        }
         val status = when { blocked != null -> "Diabaikan"; parsed != null -> "Tercatat"; else -> "Perlu diperiksa" }
         val detail = blocked?.let { "Blacklist: ${it.keyword}" } ?: parsed?.let { "${it.category} · Rp ${it.amount.toLong()}" } ?: "Nominal atau jenis transaksi tidak dikenali. Tambahkan manual bila perlu."
         finance.addNotification(event.copy(status = status, detail = detail))
         if (parsed != null) transactions.insertTransaction(TransactionEntity(amount = parsed.amount, note = parsed.note, category = parsed.category, isIncome = parsed.isIncome, date = event.postedAt, source = "blu"))
         parsed
+    }
+    private fun eligibleCashback(tx: TransactionEntity, event: NotificationRecord, amount: Double): Boolean =
+        !tx.isIncome && tx.date <= event.postedAt && tx.amount - tx.refund >= amount
+
+    suspend fun linkCashback(eventId: String, transactionId: Int) = database.withTransaction {
+        val event = requireNotNull(finance.notification(eventId)) { "Cashback tidak ditemukan" }
+        require(event.status == "Cashback perlu ditautkan" || event.status == "Perlu diperiksa") { "Cashback sudah diproses" }
+        require(finance.recordedOccurrence(event.occurrenceId) == 0) { "Cashback sudah diproses" }
+        val config = requireNotNull(finance.config())
+        val parsed = requireNotNull(NotificationTransactionParser.parse(event.title, event.text, rules.getAllRulesSync(), event.postedAt, config.timezone)) { "Cashback belum dikenali" }
+        require(parsed.isCashback)
+        require(finance.similarRecorded(event.fingerprint, event.postedAt) == 0) { "Cashback identik sudah diproses" }
+        val tx = requireNotNull(transactions.getAllTransactionsSync().find { it.id == transactionId }) { "Transaksi asal tidak ditemukan" }
+        require(eligibleCashback(tx, event, parsed.amount)) { "Cashback melebihi pengeluaran tersisa atau tanggal tidak sesuai" }
+        applyCashback(event, tx, parsed.amount)
+    }
+    suspend fun dismissCashback(eventId: String) = database.withTransaction {
+        val event = requireNotNull(finance.notification(eventId))
+        require(event.status == "Cashback perlu ditautkan" || event.status == "Perlu diperiksa")
+        finance.updateNotification(event.copy(status = "Tercatat", detail = "Cashback ditangani manual; transaksi tidak diubah."))
+        finance.closeCashbackDuplicates(event.eventId, event.occurrenceId, event.fingerprint, event.postedAt)
+    }
+    private suspend fun applyCashback(event: NotificationRecord, tx: TransactionEntity, amount: Double) {
+        val description = "Cashback Rp ${amount.toLong()} · ${event.title}"
+        transactions.insertTransaction(tx.copy(refund = tx.refund + amount, refundNote = listOf(tx.refundNote, description).filter { it.isNotBlank() }.joinToString("\n")))
+        finance.updateNotification(event.copy(status = "Tercatat", detail = "Cashback ditautkan · ${tx.note.ifBlank { tx.category }} · Rp ${amount.toLong()}"))
+        finance.closeCashbackDuplicates(event.eventId, event.occurrenceId, event.fingerprint, event.postedAt)
     }
     private fun validatePolicy(policy: BudgetPolicy) { require(policy.weeklyAmounts().all { it <= BudgetEngine.MAX_AMOUNT }) }
     private fun validateTransaction(tx: TransactionEntity) {

@@ -2,7 +2,7 @@ package com.example.flux.preferences
 
 /** UI labels only. Stored categories, bank notifications and user notes keep their original text. */
 fun translate(text: String, language: String = AppPreferences.state.value.language): String {
-    if (language == "id") return indonesianLabels[text] ?: text
+    if (language == "id") return mealLabels[text] ?: indonesianLabels[text] ?: text
     englishLabels[text]?.let { return it }
     for ((pattern, replacement) in dynamicLabels) {
         if (pattern.matches(text)) return pattern.replace(text, replacement)
@@ -10,8 +10,79 @@ fun translate(text: String, language: String = AppPreferences.state.value.langua
     return text
 }
 
+private val mealLabels = mapOf("Breakfast" to "Sarapan", "Lunch" to "Makan siang", "Dinner" to "Makan malam", "Snack" to "Snack", "Extra food" to "Makanan tambahan", "Food stock" to "Stok makanan", "Drinks" to "Minuman")
 private val indonesianLabels = mapOf("Expense" to "Pengeluaran", "Income" to "Pemasukan", "Food and Beverages" to "Makanan & minuman", "Food & Beverages" to "Makanan & minuman", "Transportation" to "Transportasi", "Groceries and Shopping" to "Belanja", "Entertainment" to "Hiburan", "Account Transfer" to "Transfer rekening", "Other" to "Lainnya", "Cancel" to "Batal", "Refund" to "Pengembalian", "manual" to "manual", "Language" to "Bahasa", "Theme" to "Tema")
 private val englishLabels = """
+Ubah kategori | Change category
+Pilih kategori | Choose category
+Sesuaikan kategori transaksi ini. | Choose a category for this transaction.
+Hapus pencarian | Clear search
+Coba parser tanpa membuat transaksi | Try the parser without creating transactions
+Pakai contoh blu | Use blu sample
+Isi contoh untuk melihat hasil parser. | Enter a sample to preview the parser result.
+Semua alokasi bulanan, dalam satu tempat. | All monthly allocations in one place.
+Mingguan | Weekly
+Bulanan tetap | Fixed monthly
+Pocket mingguan | Weekly pockets
+Pocket bulanan | Monthly pockets
+Tambah pocket bulanan | Add monthly pocket
+Nama pocket | Pocket name
+Nominal per bulan | Monthly amount
+Simpan pocket | Save pocket
+Edit pocket | Edit pocket
+Hapus pocket | Delete pocket
+Hapus pocket? | Delete pocket?
+Detail pocket | Pocket details
+Tetap tiap bulan | Fixed each month
+Nominal tetap setiap bulan, sampai lu ubah atau hapus. | A fixed amount every month until you edit or delete it.
+Nominal tetap, otomatis masuk pembagian setiap bulan. | A fixed amount included in every month's allocation.
+Hanya alokasi; saldo dan budget harian tetap sama. | Allocation only; your balance and daily budget stay the same.
+Pocket ini akan dihapus dari semua pembagian bulanan. Transaksi tetap tersimpan. | This pocket will be removed from all monthly allocations. Transactions stay saved.
+Tambahkan kos, tabungan, atau alokasi lain dengan nominal tetap setiap bulan. | Add rent, savings or other fixed monthly allocations.
+Ketuk kartu untuk rincian. Ini kalkulator alokasi; tidak membuat transaksi atau memindahkan uang. | Tap a card for details. This allocation calculator doesn't create transactions or move money.
+Nominal mengikuti budget harian. Tanggal sebelum budget pertama memakai pola pertama yang tersedia. | Amounts follow daily budgets. Dates before your first budget use the earliest available pattern.
+Pocket tersimpan | Pocket saved
+Pocket dihapus | Pocket deleted
+Isi nama pocket (maksimal 80 karakter) | Enter a pocket name (up to 80 characters)
+Nominal pocket harus positif | Pocket amount must be positive
+Budget pocket | Pocket budget
+Siapkan dana mingguan, pas sampai akhir bulan. | Plan weekly funds through the end of the month.
+DANA BULAN INI | THIS MONTH'S FUNDS
+pocket mingguan | weekly pockets
+hari | days
+Pocket minggu | Weekly pocket
+Rincian harian | Daily breakdown
+Hitung dana setiap minggu dalam sebulan | Calculate each week's funds for the month
+Utility | Utilities
+Senin–Minggu, dipotong batas bulan. Nominal mengikuti budget setiap tanggal; saldo dan extra tidak ikut dihitung. | Monday to Sunday, clipped to the month. Totals follow each day's budget, excluding balance and extra.
+Atur budget harian dulu untuk menghitung pocket. | Set your daily budget to calculate pockets.
+Ini kalkulator saja; tidak membuat transaksi atau memindahkan uang. Tanggal sebelum budget pertama memakai pola budget pertama yang tersedia. | This calculator doesn't create transactions or move money. Dates before the first budget use the earliest available weekly pattern.
+Cashback menunggu transaksi asal | Cashback needs an original transaction
+Pilih pengeluaran asal. Cashback mengurangi pengeluaran dan mengembalikan budget. | Choose the original expense. Cashback reduces spending and restores your budget.
+Pilih transaksi asal | Choose original transaction
+Cashback akan mengurangi nominal efektif transaksi yang dipilih. | Cashback reduces the selected transaction's effective amount.
+Tidak ada pengeluaran yang sesuai. Periksa nominal dan tanggal transaksi. | No eligible expense. Check the amount and transaction date.
+Pilih transaksi di Sistem untuk mengembalikan budget. | Choose a transaction in System to restore your budget.
+Cashback ditandai selesai | Cashback marked complete
+Sudah ditangani manual | Already handled manually
+Cashback ditangani manual; transaksi tidak diubah. | Cashback handled manually; transactions unchanged.
+Cashback ditautkan | Cashback linked
+Cashback perlu ditautkan | Cashback needs linking
+Cashback tidak ditemukan | Cashback not found
+Cashback sudah diproses | Cashback already processed
+Cashback belum dikenali | Cashback not recognized
+Cashback identik sudah diproses | Identical cashback already processed
+Transaksi asal tidak ditemukan | Original transaction not found
+Cashback melebihi pengeluaran tersisa atau tanggal tidak sesuai | Cashback exceeds remaining expense or the date doesn't match
+Pilih transaksi asal untuk mengembalikan saldo dan budget. | Choose the original transaction to restore balance and budget.
+Cashback duplikat sudah diproses | Duplicate cashback already processed
+Refund / cashback / cancel | Refund / cashback / cancel
+Refund / cashback | Refund / cashback
+Ada refund atau cashback? | Any refund or cashback?
+Tambahkan refund / cashback | Add refund / cashback
+Total refund + cashback (Rp) | Total refund + cashback (Rp)
+Alasan refund / cashback · wajib | Refund / cashback reason · required
+Dikembalikan penuh | Fully returned
 Sistem | System
 Preferensi | Preferences
 Bahasa | Language

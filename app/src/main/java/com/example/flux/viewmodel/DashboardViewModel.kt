@@ -18,15 +18,19 @@ import java.util.Locale
 fun rupiah(amount: Long): String = NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply { maximumFractionDigits = 0 }.format(amount).replace("Rp", "Rp ")
 
 class DashboardViewModel(private val repository: TransactionRepository) : ViewModel() {
+    val monthlyPockets = repository.monthlyPockets.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    fun saveMonthlyPocket(pocket: MonthlyPocket, done: () -> Unit) = perform("Pocket tersimpan", done) { repository.saveMonthlyPocket(pocket) }
+    fun deleteMonthlyPocket(pocket: MonthlyPocket, done: () -> Unit) = perform("Pocket dihapus", done) { repository.deleteMonthlyPocket(pocket) }
     val config = repository.config.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val policies = repository.policies.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val adjustments = repository.adjustments.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val parserRules = repository.allRules.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val pendingCashbacks = repository.pendingCashbacks.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val notifications = repository.notifications.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     private val clock = flow { while (true) { emit(System.currentTimeMillis()); delay(15_000) } }
     private data class Inputs(val rows: List<TransactionEntity>, val config: FinanceConfig?, val policies: List<BudgetPolicy>, val adjustments: List<BalanceAdjustment>)
     private val inputs = combine(repository.allTransactions, repository.config, repository.policies, repository.adjustments) { t, c, p, a -> Inputs(t, c, p, a) }
-    val uiState = combine(inputs, clock) { input, now ->
+    val uiState = combine(inputs, clock, androidx.compose.runtime.snapshotFlow { com.example.flux.preferences.AppPreferences.state.value }) { input, now, _ ->
         val today = BudgetEngine.day(now, input.config?.timezone ?: "Asia/Jakarta")
         val totals = BudgetEngine.calculate(input.config, input.policies, input.rows, input.adjustments, today)
         val transactions = if (input.config == null) emptyList() else input.rows.filter { !it.category.startsWith("Injection") }.map { entity ->
@@ -63,6 +67,8 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
     fun deleteTransaction(id: Int, done: () -> Unit = {}) = perform("Transaksi dihapus", done) { repository.delete(id) }
     fun getTransactionById(id: Int) = uiState.value.recentTransactions.find { it.id == id }
     fun saveRule(rule: ParserRule, done: () -> Unit = {}) = perform("Aturan tersimpan", done) { if (rule.id == 0) repository.insertRule(rule) else repository.updateRule(rule) }
+    fun dismissCashback(eventId: String) = perform("Cashback ditandai selesai") { repository.dismissCashback(eventId) }
+    fun linkCashback(eventId: String, transactionId: Int, done: () -> Unit) = perform("Cashback ditautkan", done) { repository.linkCashback(eventId, transactionId) }
     fun deleteParserRule(rule: ParserRule) = perform("Aturan dihapus") { repository.deleteRule(rule) }
     fun adjust(target: String, amount: Long, note: String, done: () -> Unit) = perform("Koreksi tersimpan", done) { repository.addAdjustment(BalanceAdjustment(target = target, amount = amount, note = note.trim())) }
     fun deleteAdjustment(row: BalanceAdjustment) = perform("Koreksi dihapus") { repository.deleteAdjustment(row) }
@@ -101,16 +107,10 @@ class DashboardViewModel(private val repository: TransactionRepository) : ViewMo
         return MonthlyAnalyticsState(rupiah(expense.toLong()), rupiah(rows.filter { it.isIncome }.sumOf { it.amount }.toLong()), stats, graph)
     }
     private fun style(category: String, income: Boolean): Pair<Int, Color> {
-        if (income) return R.drawable.ic_wallet_outline to CatBlue
-        return when (category) {
-            "Food and Beverages" -> R.drawable.ic_food_outline to CatOrange
-            "Transportation" -> R.drawable.ic_car_outline to CatGreen
-            "Groceries and Shopping" -> R.drawable.ic_cart_outline to CatPurple
-            "Entertainment" -> R.drawable.ic_ticket_outline to CatYellow
-            "Account Transfer" -> R.drawable.ic_card_outline to CatBlue
-            else -> R.drawable.ic_other_outline to CatGrey
-        }
+        val visual = categoryVisual(if (income) "Income" else category)
+        return visual.icon to visual.color
     }
+
 }
 class DashboardViewModelFactory(private val repository: TransactionRepository) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

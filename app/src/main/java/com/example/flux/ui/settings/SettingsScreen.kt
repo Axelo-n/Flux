@@ -42,12 +42,15 @@ import kotlinx.coroutines.withContext
 import java.time.*
 
 @Composable
-fun SettingsScreen(viewModel: DashboardViewModel, onBudget: () -> Unit = {}, onRules: () -> Unit = {}, onRestart: () -> Unit = {}) {
+fun SettingsScreen(viewModel: DashboardViewModel, onBudget: () -> Unit = {}, onRules: () -> Unit = {}, onRestart: () -> Unit = {}, onPockets: () -> Unit = {}) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val health by FluxNotificationListenerService.health.collectAsState()
     val config by viewModel.config.collectAsState()
+    val cashbackLogs by viewModel.pendingCashbacks.collectAsState()
+    val transactions by viewModel.uiState.collectAsState()
+    var cashbackChoice by remember { mutableStateOf<com.example.flux.data.NotificationRecord?>(null) }
     val logs by viewModel.notifications.collectAsState()
     val adjustments by viewModel.adjustments.collectAsState()
     fun allowed(): Boolean = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")?.split(":")?.any { ComponentName.unflattenFromString(it)?.packageName == context.packageName } == true
@@ -102,6 +105,21 @@ fun SettingsScreen(viewModel: DashboardViewModel, onBudget: () -> Unit = {}, onR
             SettingsLink("Tema", mapOf("white" to "Putih", "black" to "Hitam", "teal" to "Teal", "violet" to "Violet", "luca" to "Luca").getValue(preferences.theme), FluxIcons.Theme, { chooseTheme = true })
             Hint("blu · ${config?.timezone ?: "WIB"} · mulai ${config?.let { LocalDate.ofEpochDay(it.startDay) } ?: "—"}")
         }
+        Panel("Utility") {
+            SettingsLink("Budget pocket", "Hitung dana setiap minggu dalam sebulan", Icons.Default.List, onPockets)
+        }
+        if (cashbackLogs.isNotEmpty()) Panel("Cashback menunggu transaksi asal") {
+            Hint("Pilih pengeluaran asal. Cashback mengurangi pengeluaran dan mengembalikan budget.")
+            cashbackLogs.forEach { event ->
+                val parsed = com.example.flux.notification.NotificationTransactionParser.parse(event.title, event.text, emptyList(), event.postedAt, config?.timezone ?: "Asia/Jakarta")
+                if (parsed?.isCashback == true) {
+                    Text(rupiah(parsed.amount.toLong()), color = UITeal, style = AppFont.Bold)
+                    Hint(event.text, localized = false)
+                    OutlinedButton({ cashbackChoice = event }, modifier = Modifier.fillMaxWidth()) { Text(translate("Pilih transaksi asal")) }
+                    TextButton({ viewModel.dismissCashback(event.eventId) }) { Text(translate("Sudah ditangani manual")) }
+                } else Hint(event.text, localized = false)
+            }
+        }
         Panel("Pencatatan blu") {
             Text(translate(if (access && health.connected) "● Terhubung" else if (access) "● Belum tersambung" else "● Akses belum diberikan"), color = if (access && health.connected) UITeal else CatOrange, style = AppFont.Bold)
             Hint("Status ini mengikuti koneksi listener, bukan hanya izin Android.")
@@ -119,8 +137,8 @@ fun SettingsScreen(viewModel: DashboardViewModel, onBudget: () -> Unit = {}, onR
             Hint("Sesuaikan saldo atau extra jika ada selisih catatan.")
             OutlinedButton({ showCorrection = !showCorrection }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Icon(Icons.Default.Edit, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(translate(if (showCorrection) "Tutup koreksi" else "Buat koreksi")) }
             if (showCorrection) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("saldo", "extra").forEach { choice -> FilterChip(target == choice, { target = choice }, { Text(translate(choice.replaceFirstChar(Char::uppercase))) }) } }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { FilterChip(!subtract, { subtract = false }, { Text(translate("Tambah")) }); FilterChip(subtract, { subtract = true }, { Text(translate("Kurangi")) }) }
+            FilterTabs(listOf("Saldo", "Extra"), if (target == "saldo") 0 else 1) { target = if (it == 0) "saldo" else "extra" }
+            FilterTabs(listOf("Tambah", "Kurangi"), if (subtract) 1 else 0) { subtract = it == 1 }
             OutlinedTextField(amount, { if (it.all(Char::isDigit)) amount = it }, label = { Text(translate("Nominal (Rp)")) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(note, { note = it }, label = { Text(translate("Alasan koreksi")) }, modifier = Modifier.fillMaxWidth())
             Hint("Koreksi saldo hanya mengubah saldo. Koreksi extra hanya mengubah extra, bukan pemasukan atau pengeluaran.")
@@ -151,6 +169,22 @@ fun SettingsScreen(viewModel: DashboardViewModel, onBudget: () -> Unit = {}, onR
                 HorizontalDivider(color = UIGray.copy(alpha = .15f))
             }
             if (logs.size > 3) TextButton({ showAllLogs = !showAllLogs }) { Text(translate(if (showAllLogs) "Ringkas aktivitas" else "Lihat semua ${logs.size} notifikasi")) }
+        }
+    }
+    cashbackChoice?.let { event ->
+        val parsed = com.example.flux.notification.NotificationTransactionParser.parse(event.title, event.text, emptyList(), event.postedAt, config?.timezone ?: "Asia/Jakarta")
+        val candidates = transactions.recentTransactions.filter { !it.isIncome && it.date <= event.postedAt && it.amount >= (parsed?.amount ?: Double.MAX_VALUE) }
+        FluxDialog("Pilih transaksi asal", "Cashback akan mengurangi nominal efektif transaksi yang dipilih.", Icons.Default.Edit, { cashbackChoice = null }) {
+            Text(rupiah((parsed?.amount ?: 0.0).toLong()), color = UITeal, style = AppFont.Bold.copy(fontSize = 26.sp))
+            if (candidates.isEmpty()) Hint("Tidak ada pengeluaran yang sesuai. Periksa nominal dan tanggal transaksi.")
+            candidates.forEach { tx ->
+                Surface(onClick = { viewModel.linkCashback(event.eventId, tx.id) { cashbackChoice = null } }, color = UISurfaceRaised, shape = RoundedCornerShape(16.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(if (tx.note.isBlank()) translate(tx.category) else tx.note, color = UIWhite, style = AppFont.SemiBold)
+                        Text("${rupiah(tx.amount.toLong())} · ${com.example.flux.model.BudgetEngine.day(tx.date, config?.timezone ?: "Asia/Jakarta")}", color = UIGray, style = AppFont.Regular)
+                    }
+                }
+            }
         }
     }
     if (pendingImport != null) AlertDialog(onDismissRequest = { pendingImport = null }, title = { Text(translate("Ganti data dengan backup?")) }, text = { Text(translate("Data sekarang akan diganti seluruhnya jika backup valid. Backup versi lama Flux tidak didukung.")) }, confirmButton = { TextButton({ val json = pendingImport!!; pendingImport = null; viewModel.restoreFromBackup(json, {}, {}) }) { Text(translate("Restore")) } }, dismissButton = { TextButton({ pendingImport = null }) { Text(translate("Batal")) } })

@@ -5,6 +5,15 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FinanceDao {
+    @Query("SELECT * FROM monthly_pockets ORDER BY id")
+    fun observeMonthlyPockets(): Flow<List<MonthlyPocket>>
+    @Query("SELECT * FROM monthly_pockets ORDER BY id")
+    suspend fun monthlyPockets(): List<MonthlyPocket>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveMonthlyPocket(pocket: MonthlyPocket)
+    @Delete suspend fun deleteMonthlyPocket(pocket: MonthlyPocket)
+    @Query("DELETE FROM monthly_pockets") suspend fun clearMonthlyPockets()
+
     @Query("SELECT * FROM finance_config WHERE id = 1")
     fun observeConfig(): Flow<FinanceConfig?>
     @Query("SELECT * FROM finance_config WHERE id = 1")
@@ -37,6 +46,14 @@ interface FinanceDao {
     suspend fun similarRecorded(fingerprint: String, postedAt: Long): Int
     @Query("SELECT COUNT(*) FROM notification_records WHERE occurrenceId = :occurrenceId AND status = 'Tercatat'")
     suspend fun recordedOccurrence(occurrenceId: String): Int
+    @Query("SELECT * FROM notification_records WHERE eventId = :id")
+    suspend fun notification(id: String): NotificationRecord?
+    @Query("SELECT * FROM notification_records WHERE status = 'Cashback perlu ditautkan' OR (status = 'Perlu diperiksa' AND (LOWER(title) LIKE '%cashback%' OR LOWER(text) LIKE '%cashback%')) ORDER BY postedAt DESC")
+    fun observePendingCashbacks(): Flow<List<NotificationRecord>>
+    @Query("UPDATE notification_records SET status = 'Diabaikan', detail = 'Cashback duplikat sudah diproses' WHERE eventId != :id AND status != 'Tercatat' AND (occurrenceId = :occurrence OR (fingerprint = :fingerprint AND ABS(postedAt - :time) <= 120000))")
+    suspend fun closeCashbackDuplicates(id: String, occurrence: String, fingerprint: String, time: Long)
+    @Update
+    suspend fun updateNotification(record: NotificationRecord)
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addNotification(record: NotificationRecord): Long
     @Query("DELETE FROM finance_config") suspend fun clearConfig()

@@ -4,7 +4,7 @@ import com.example.flux.data.ParserRule
 import com.example.flux.model.BudgetEngine
 import java.util.Locale
 
-data class ParsedTransaction(val amount: Double, val category: String, val note: String, val isIncome: Boolean)
+data class ParsedTransaction(val amount: Double, val category: String, val note: String, val isIncome: Boolean, val isCashback: Boolean = false)
 
 object NotificationTransactionParser {
     private fun full(title: String, text: String) = "$title $text".lowercase(Locale.ROOT)
@@ -12,12 +12,22 @@ object NotificationTransactionParser {
         val content = full(title, text)
         return rules.firstOrNull { it.enabled && it.blocked && it.keyword.isNotBlank() && content.contains(it.keyword.trim().lowercase(Locale.ROOT)) }
     }
-    fun parse(title: String, text: String, customRules: List<ParserRule>): ParsedTransaction? {
+    fun parse(title: String, text: String, customRules: List<ParserRule>, timestamp: Long = System.currentTimeMillis(), timezone: String = "Asia/Jakarta"): ParsedTransaction? {
         if (blockedBy(title, text, customRules) != null) return null
         val content = full(title, text)
         // Refund requires linking to an original expense. Never silently turn it into income.
         if (listOf("refund", "pengembalian dana", "dikembalikan", "dibatalkan").any { content.contains(it) }) return null
-        if (listOf("gagal", "tidak berhasil", "otp", "kode verifikasi", "akan diproses", "sedang diproses", "promo").any { content.contains(it) }) return null
+        if (listOf("gagal", "tidak berhasil", "otp", "kode verifikasi", "akan diproses", "sedang diproses").any { content.contains(it) }) return null
+        val cashback = Regex("\\bcash\\s*back\\b").containsMatchIn(content)
+        if (cashback) {
+            if (!Regex("\\b(berhasil|sukses|diterima|mendapatkan|mendapat|dapat|masuk|dikreditkan)\\b").containsMatchIn(content)) return null
+            val amount = extractAmount(content)
+            if (amount <= 0 || amount > BudgetEngine.MAX_AMOUNT) return null
+            val rule = customRules.firstOrNull { it.enabled && !it.blocked && it.keyword.isNotBlank() && content.contains(it.keyword.trim().lowercase(Locale.ROOT)) }
+            val merchant = rule?.targetNote?.takeIf { it.isNotBlank() } ?: extractCounterparty(text).ifBlank { extractCounterparty(title) }
+            return ParsedTransaction(amount, "Cashback", merchant, false, isCashback = true)
+        }
+        if (content.contains("promo")) return null
         val income = listOf("dana masuk", "terima transfer", "transfer masuk", "menerima transfer", "transfer diterima").any { content.contains(it) }
         // blu places the amount between "Transfer" and "ke", so literal "transfer ke" misses it.
         val outgoingTransfer = Regex("\\btransfer\\s+(?:rp\\.?|idr)\\s*[0-9].*?\\b(?:ke|kepada)\\s+.+?\\s+(?:berhasil|sukses)[.!]?\\s*$", RegexOption.DOT_MATCHES_ALL).containsMatchIn(content)
@@ -26,13 +36,14 @@ object NotificationTransactionParser {
         val amount = extractAmount(content)
         if (amount <= 0 || amount > BudgetEngine.MAX_AMOUNT) return null
         val rule = customRules.firstOrNull { it.enabled && !it.blocked && it.keyword.isNotBlank() && content.contains(it.keyword.trim().lowercase(Locale.ROOT)) }
-        return ParsedTransaction(amount, rule?.targetCategory ?: category(content, income), rule?.targetNote?.takeIf { it.isNotBlank() } ?: extractCounterparty(text).ifBlank { extractCounterparty(title) }, income)
+        return ParsedTransaction(amount, rule?.targetCategory ?: category(content, income, timestamp, timezone), rule?.targetNote?.takeIf { it.isNotBlank() } ?: extractCounterparty(text).ifBlank { extractCounterparty(title) }, income)
     }
     private fun extractCounterparty(text: String): String {
         // Preserve the seller's spelling; currency, status and account numbers are metadata.
         val patterns = listOf(
             "(?:tujuan|penerima|merchant|atas nama)\\s*:?\\s+(.+)",
             "(?:transaksi|pembayaran|pembelian|bayar)(?:\\s+(?:berhasil|sukses))?\\s+(?:di|ke|kepada|untuk)\\s+(.+)",
+            "(?:cashback|cash back).*?\\b(?:dari|di)\\s+(.+)",
             "(?:transfer|kirim dana).*?\\b(?:ke|kepada)\\s+(.+)",
             "(?:dana masuk|terima transfer|menerima transfer|transfer masuk|transfer diterima).*?\\bdari\\s+(.+)",
             "(?:tujuan|penerima|merchant)\\s*:\\s*(.+)"
@@ -48,7 +59,7 @@ object NotificationTransactionParser {
         if (match.groupValues[2].isNotEmpty() && match.groupValues[2] != "00") return 0.0
         return match.groupValues[1].replace(".", "").toDoubleOrNull() ?: 0.0
     }
-    private fun category(text: String, income: Boolean): String {
+    private fun category(text: String, income: Boolean, timestamp: Long, timezone: String): String {
         if (income) return "Income"
         val categories = linkedMapOf(
             "Food and Beverages" to listOf("kopi", "makan", "food", "restoran", "cafe", "starbucks", "mcd", "kfc"),
@@ -57,6 +68,7 @@ object NotificationTransactionParser {
             "Entertainment" to listOf("netflix", "spotify", "steam", "bioskop", "cinema", "game"),
             "Account Transfer" to listOf("transfer", "kirim dana")
         )
-        return categories.entries.firstOrNull { (_, words) -> words.any { text.contains(it) } }?.key ?: "Other"
+        val inferred = categories.entries.firstOrNull { (_, words) -> words.any { text.contains(it) } }?.key
+        return if (inferred == null || inferred == "Food and Beverages") com.example.flux.model.MealCategories.at(timestamp, timezone) else inferred
     }
 }
