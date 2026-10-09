@@ -16,6 +16,18 @@ class PresentationPreferencesTest {
         assertEquals("Delete 'warung budi'?", translate("Hapus 'warung budi'?", "en"))
         assertEquals("gorengan gembleng", translate("gorengan gembleng", "en"))
     }
+    @Test fun everyCategoryHasDistinctReadableColorsInEveryTheme() {
+        fluxPalettes.forEach { (theme, palette) ->
+            val styles = com.example.flux.ui.theme.categoryVisuals(theme)
+            assertEquals("$theme distinct hues", styles.size, styles.map { it.color }.distinct().size)
+            styles.forEach { style ->
+                val foreground = style.color.luminance()
+                val background = palette.raised.luminance()
+                val contrast = (maxOf(foreground, background) + .05f) / (minOf(foreground, background) + .05f)
+                assertTrue("$theme ${style.name} icon contrast $contrast", contrast >= 3f)
+            }
+        }
+    }
     @Test fun allThemesKeepTextAndMoneyReadable() {
         fun contrast(a: Color, b: Color): Float {
             val first = a.luminance(); val second = b.luminance()

@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.flux"
         minSdk = 24
         targetSdk = 36
-        versionCode = 13
-        versionName = "5.2"
+        versionCode = 14
+        versionName = "5.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
